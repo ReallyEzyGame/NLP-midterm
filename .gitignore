@@ -1,0 +1,16 @@
+# evironemnt
+.venv
+venv
+.env
+
+
+# cache
+__pycache__
+
+# Data
+data/
+
+# images
+*.jpg
+*.jpeg
+*.png
