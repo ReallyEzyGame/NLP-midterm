@@ -35,8 +35,27 @@ vanbia-ocr-project/
 │   ├── step3_ocr_align/            # text_aligner (Levenshtein/DP), crop_patches, export_ocr_dataset
 │   ├── step4_trans_align/          # sentence_align (BertAlign), export_dich_dataset
 │   └── utils/                      # file_io, image_processing (scale box khi resize), stats
+│   │__ tests/                      # generate test data
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
 
+## Hướng dẫn chạy
+
+```bash
+# Ở thư mục gốc của đồ án
+# Tạo .venv
+python -m venv .venv
+# Chạy môi trường ảo
+# Linux
+source .venv/bin/activate
+# Tải các gói cần trong dự án
+pip install -r requirements.txt
+
+# Chạy mock thử
+python -m tests.make_fake_data --keep ./tmp/fake      # thử bằng dữ liệu giả
+# Sau khi chạy, dời tmp/fake/data vào data của thư mục gốc để chạy thử tiếp ở dưới
+python -m src.step3_ocr_align.export_ocr_dataset     # chạy thật
+python -m src.step3_ocr_align.export_ocr_dataset --only 00270-TF1 --allow-missing-align   # chỉ xuất det_gt khi C chưa xong
+```
