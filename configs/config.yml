@@ -1,0 +1,24 @@
+# Cấu hình tham số toàn dự án OCR Văn bia (Data Contract v1.0)
+
+dataset:
+  max_side: 1024            # Kích thước cạnh dài tối đa của ảnh toàn bia
+  patch_max_height: 96      # Chiều cao tối đa của ảnh crop cột chữ (patch)
+  patch_rotate_ccw: 90      # Xoay ngược chiều kim đồng hồ đối với cột đứng
+  jpeg_quality: 95
+
+aligner:
+  algo: "dp"                # "dp" (Semi-Global Fitting Alignment) hoặc "heuristic"
+  threshold: 0.60           # Ngưỡng phân loại 'ok' vs 'needs_review'
+  min_reliable_score: 0.40  # Ngưỡng nhận diện box rác/nhiễu viền (Anti-drift)
+  
+  # Trọng số ma trận quy hoạch động (DP weights)
+  weights:
+    match_score: 2.0
+    mismatch_penalty: -1.0
+    gap_penalty: -1.5
+
+  # Trọng số điểm tin cậy tổng hợp (Composite Confidence Score)
+  composite_weights:
+    char_sim: 0.70          # Tỉ lệ tương đồng ký tự (hỗ trợ wildcard)
+    len_ratio: 0.20         # Tỉ lệ nhất quán độ dài box
+    ocr_conf: 0.10          # Điểm tin cậy gốc từ mô hình PaddleOCR
