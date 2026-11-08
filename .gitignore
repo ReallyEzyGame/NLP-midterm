@@ -9,6 +9,7 @@ __pycache__
 
 # Data
 data/
+tasks_sheet.csv
 
 # images
 *.jpg
