@@ -33,7 +33,7 @@ def image_links(lines):
                 raise ValueError("Expected an HTTPS image URL on carto.vietnamica.online")
             if parts.query or parts.fragment or parts.username or parts.password:
                 raise ValueError("Direct image URL must not contain query parameters or credentials")
-            match = re.fullmatch(r"(\d{5})(?:-[\w-]+)?\.(jpg|jpeg|png)", Path(parts.path).name, re.I)
+            match = re.fullmatch(r"(\d{5})(?:[-&%][\w&%-]+)?\.(jpg|jpeg|png)", Path(parts.path).name, re.I)
             if not match:
                 raise ValueError("Cannot identify image reference number in URL filename")
             if url not in seen:
@@ -87,7 +87,7 @@ def main():
         args.output.mkdir(parents=True, exist_ok=True)
         args.log.parent.mkdir(parents=True, exist_ok=True)
     for ref, url, ext in images:
-        filename = f"{ref}.{ext}" if counts[ref] == 1 else Path(urlsplit(url).path).name
+        filename = re.sub(r"&[\d]+", "", Path(urlsplit(url).path).name)
         target = args.output / filename
         if args.dry_run:
             print(f"{filename} <- {url}")
