@@ -1,0 +1,18 @@
+# Môi trường Python 3.12 (.venv). Cập nhật 07/11/2026 theo bước 0.A.
+# Xử lý ảnh / dữ liệu
+pillow==13.0.0
+numpy==2.5.4
+opencv-python==5.0.0.93
+openpyxl==3.1.5
+pandas==3.1.1
+PyYAML==6.0.3
+regex==2026.9.29
+RapidFuzz==3.14.6
+
+# OCR cục bộ (dự phòng; dùng để định vị tiêu đề/nhãn toàn sách)
+rapidocr==3.10.0
+onnxruntime==1.31.1
+
+# OCR sách: Google AI Studio (Gemini API) — đã chốt gemini-3.5-flash-lite.
+# Key đọc từ file ngoài repo qua biến môi trường GEMINI_API_KEY_FILE (chỉ chứa đường dẫn). KHÔNG commit key.
+google-genai==3.0.0
