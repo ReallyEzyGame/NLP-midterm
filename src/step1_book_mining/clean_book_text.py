@@ -78,11 +78,13 @@ def process(stt: int, row: dict, model: str, end: tuple[int, bool] | None = None
     """Trả về số đếm + ``loi`` (chuỗi rỗng nếu ổn; khác rỗng ⇒ KHÔNG dùng kết quả) + ``canh_bao`` (danh sách)."""
     bid = bia_id_of(stt)
     a, b = page_range(row)
+    b_goc = b                                   # trang cuối theo mục lục; các trang sau đó chỉ để tìm điểm dừng
     expect_end = False
     if end is not None:
         b, expect_end = end
     pages = list(range(a, b + 1))
     log: list[str] = []
+    body_pages: set[int] = set()              # trang có đóng góp ít nhất một dòng Phiên âm/Dịch nghĩa
     loi = ""
     canh_bao: list[str] = []
 
@@ -111,6 +113,7 @@ def process(stt: int, row: dict, model: str, end: tuple[int, bool] | None = None
     dich: list[str] = []
     for p in pages:
         skip_rest = False                  # đã gặp chú thích cuối trang ⇒ bỏ phần còn lại của trang này
+        n_before = len(phien) + len(dich)     # để biết trang này có đóng góp dòng văn bản nào không
         for ln in raw[p].split("\n"):
             s = ln.strip()
             tag = f"tr.{p}"
@@ -173,17 +176,23 @@ def process(stt: int, row: dict, model: str, end: tuple[int, bool] | None = None
                 if rf.is_page_number(s):
                     log.append(f"[số trang, bỏ] {tag}: {s}")
                     continue
+                if p > b_goc and rf.is_caption(s):     # trang đọc thêm chỉ có chú thích ảnh (vd tr.199 trước bia 21)
+                    log.append(f"[chú thích ảnh ở trang đọc thêm, bỏ] {tag}: {s}")
+                    continue
                 if rf.is_footnote(s):
                     log.append(f"[chú thích, bỏ] {tag}: {s}")
                     skip_rest = True
                     continue
                 (phien if state == "phien" else dich).append(s)
+                if s:                                  # dòng trống chỉ là ranh giới đoạn, không phải văn bản
+                    body_pages.add(p)
                 continue
             # state == "end": bỏ phần còn lại (bia kế)
 
     if state in ("pre", "han"):
         log.append("[LỖI] không thấy tiêu đề Việt — kiểm tra thủ công")
-    if expect_end and state in ("phien", "dich"):
+    # trang đọc thêm cuối cùng không đóng góp dòng nào (vd chỉ có chú thích ảnh) ⇒ không thể giấu văn bản bị thiếu
+    if expect_end and state in ("phien", "dich") and not (b > b_goc and b not in body_pages):
         canh_bao.append(f"đọc hết tr.{b} chưa gặp điểm kết thúc (Hán/tiêu đề bia kế) — có thể thiếu đoạn cuối")
         log.append("[CẢNH BÁO] " + canh_bao[-1])
     # (sửa 3) số trong tiêu đề Hán ("N.<tên Hán>") phải bằng STT — sai ⇒ đã lấy nhầm khối Hán của bia khác

@@ -10,7 +10,7 @@ Người thực hiện: Tuấn (A) · 09/11/2026 · Hạn 1.A: T4 11/11/2026
 
 - **35/35 văn bia đều ghi đủ bộ 3 file** ở `data/processed/{Chu_Han,Phien_am,Dich_nghia}/<tên>.txt` (105 file); checker `check_van_ban_sach` (V1–V8) → **0 lỗi** (`reports/check_van_ban_*.txt`).
 - Phủ **76/76 mặt bia có ảnh**.
-- Tổng: 16.840 chữ Hán (319 dòng), 16.171 âm tiết Phiên âm (1024 dòng), 1782 dòng Dịch nghĩa.
+- Tổng: 16.840 chữ Hán (319 dòng), 16.171 âm tiết Phiên âm (1024 dòng), 1781 dòng Dịch nghĩa.
 - **2 bia thiếu một loại văn bản trong sách** (theo quyết định của Tuấn 09/11: vẫn đưa vào, loại không có để **file rỗng 0 byte**):
   - STT 13 (`02462`): `Phien_am` rỗng — sách không có mục Phiên âm (chỉ có Hán và Dịch nghĩa) ⇒ không có cặp Hán–Phiên âm–Dịch nghĩa ở bước 4.
   - STT 52 (`02497-21_02498-22`): `Chu_Han` rỗng — sách không có chữ Hán ⇒ không gióng được với box OCR ở bước 3.
@@ -31,7 +31,7 @@ Người thực hiện: Tuấn (A) · 09/11/2026 · Hạn 1.A: T4 11/11/2026
 | 13 | `02462` | 1 / 1 | 137-143 | 7 | 194 | 0 | 0 | 62 | — | Phien_am rỗng |
 | 15 | `02329-21_02330-22` | 2 / 2 | 149-154 | 4 | 451 | 26 | 384 | 46 | 0.85 | tỉ lệ lệch |
 | 16 | `02437-21_02438-22` | 2 / 2 | 155-158 | 8 | 209 | 18 | 234 | 34 | 1.12 |  |
-| 20 | `02444-21_02479-22` | 2 / 2 | 193-198 | 2 | 522 | 32 | 445 | 37 | 0.85 | cảnh báo giả (xem §4); tỉ lệ lệch |
+| 20 | `02444-21_02479-22` | 2 / 2 | 193-198 | 2 | 522 | 32 | 445 | 36 | 0.85 | tỉ lệ lệch |
 | 21 | `02442-21_02443-22` | 2 / 2 | 199-203 | 6 | 249 | 14 | 204 | 12 | 0.82 | tỉ lệ lệch |
 | 22 | `02440-21_02441-22` | 2 / 2 | 203-207 | 4 | 277 | 17 | 335 | 35 | 1.21 | tỉ lệ lệch |
 | 23 | `02477-21_02478-22` | 2 / 2 | 208-212 | 6 | 296 | 18 | 288 | 23 | 0.97 |  |
@@ -85,13 +85,13 @@ Người thực hiện: Tuấn (A) · 09/11/2026 · Hạn 1.A: T4 11/11/2026
 | tr.290 (bia 44) bị chữ in xuyên trang nặng, flash-lite lặp hoặc ra chữ sai ở mọi cách thử (3 nhiệt độ, `mixed`, nhị phân hoá ảnh) | Dùng **`gemini-3.5-flash`** cho riêng trang này (Tuấn đồng ý 09/11); nội dung khớp ảnh; báo cáo ghi rõ. Một chữ nghi nhầm, giữ nguyên |
 | Trang OCR bị dừng sớm (`MAX_TOKENS`), rỗng hoặc bị chặn | Không lưu; lần chạy sau tự thử lại; bia chứa trang đó báo `THIEU_OCR` thay vì ghi dữ liệu thiếu |
 | Dịch nghĩa bị cụt / nhầm bia do số trang trong mục lục chỉ gần đúng | Đọc tới đầu bia kế (tối đa +2 trang); kiểm số ở tiêu đề Hán = STT; cảnh báo nếu chưa gặp điểm kết thúc |
+| Chú thích ảnh một dòng (tr.199, trước bia 21) lọt vào cuối `Dich_nghia` của bia 20 — phát hiện khi đối chiếu trang đã gửi OCR với mục lục (09/11) | Ở các trang đọc thêm sang bia kế, dòng giống chú thích ảnh bị bỏ; trang đọc thêm không đóng góp dòng nào thì không báo "thiếu đoạn cuối" nữa |
 | Câu bị ngắt ở cuối trang | Nối khi đoạn trước chưa hết câu và dòng sau viết thường |
 | Bia không có chữ Hán (52) hoặc không có mục Phiên âm (13): máy trạng thái không vào được khối Hán / checker coi file rỗng là lỗi | Máy trạng thái nhận tiêu đề Việt làm điểm vào khi không có Hán; ghi file rỗng 0 byte cho loại thiếu; checker V1–V8 chấp nhận file 0 byte (file chỉ có dòng trống vẫn là lỗi V4) |
 | File cũ còn sót khi chạy lại; một bia lỗi làm dừng cả lần chạy | Xoá file cũ trước khi ghi; lỗi được cô lập từng bia (`LOI_XU_LY`) |
 | `DanhSach.xlsx` bỏ sót mặt bia (STT 7, 27, 28, 62, 64) | Tải bổ sung 7 ảnh; file bổ sung riêng; pipeline có bước **kiểm tra đồng bộ** processed ⇔ kê mã ⇔ `stt_bia_map` ⇔ ảnh ⇔ `inventory` (hiện: KHỚP) |
 
 **Cảnh báo còn lại, đã kiểm và không ảnh hưởng dữ liệu:**
-- Bia 20: "chưa gặp điểm kết thúc" là báo nhầm — tr.199 chỉ là chú thích ảnh, Hán của bia kế bắt đầu ở tr.200; văn bản bia 20 đầy đủ.
 - Bia 27, 64: không đọc được số ở tiêu đề Hán (Gemini bỏ số đầu dòng) nên không đối chiếu được STT; không ảnh hưởng nội dung.
 
 ## 5. Còn lại

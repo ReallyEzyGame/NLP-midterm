@@ -45,6 +45,16 @@ def is_footnote(line: str) -> bool:
     return bool(FOOTNOTE.search(line))
 
 
+CAPTION = re.compile(r"^(?:Bia|Hình|Ảnh|Thác bản|Bản dập)(?: [^,.;:?!()\d]{1,50})?$")
+
+
+def is_caption(line: str) -> bool:
+    """Chú thích ảnh một dòng, không dấu câu/số (vd ``Bia chùa Khánh Ninh``). CHỈ áp dụng ở các trang đọc thêm sang bia kế,
+    nơi không có văn bản của bia đang xét ngoài phần đuôi (xem ``clean_book_text``)."""
+    s = line.strip()
+    return bool(CAPTION.match(s)) and len(s.split()) <= 7
+
+
 def is_viet_header(line: str, stt: int) -> bool:
     """Tiêu đề Việt của bia: ``25. KHÁNH NINH TỰ ...`` (số = STT, không chứa chữ Hán)."""
     return (not has_han(line)) and bool(re.match(rf"^\s*{stt}\s*[.．]\s*\S", line))

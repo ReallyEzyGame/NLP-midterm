@@ -201,3 +201,31 @@ def test_checker_chap_nhan_file_0_byte_nhung_bat_dong_trong():
     assert chk.check_dir(d)[1] == 1
     (d / "Chu_Han" / "X.txt").unlink()
     assert chk.check_dir(d)[1] == 1                         # thiếu hẳn file vẫn là V6
+
+
+# ---- chú thích ảnh ở trang đọc thêm sang bia kế
+def test_chu_thich_anh_o_trang_doc_them_bi_bo():
+    p10 = "5.天地人\n5. BIA THỬ\nBia chùa X.\nPhiên âm: A\nThiên địa.\nDịch nghĩa: A\nTrời đất.\n"
+    p11 = "Bia chùa Khánh Ninh\n"
+    tmp = _setup({10: p10, 11: p11})
+    cb.process(5, ROW, MODEL, (11, False))
+    assert _read(tmp, "Dich_nghia") == ["A", "Trời đất."]            # không còn "Bia chùa Khánh Ninh"
+
+
+def test_dong_bia_trong_trang_chinh_khong_bi_coi_la_chu_thich():
+    assert rf.is_caption("Bia chùa Khánh Ninh") and not rf.is_caption("Bia chùa Khánh Ninh, số kí hiệu: 2439.")
+    assert not rf.is_caption("Bia dựng chợ vào năm 1700.")
+    p10 = "5.天地人\n5. BIA THỬ\nBia chùa X.\nPhiên âm: A\nThiên địa.\nDịch nghĩa: A\nBia Hậu Phật\nTrời đất.\n"
+    tmp = _setup({10: p10})
+    cb.process(5, ROW, MODEL, (10, False))                           # trang chính: giữ nguyên dòng "Bia Hậu Phật"
+    assert any("Bia Hậu Phật" in d for d in _read(tmp, "Dich_nghia"))      # dòng không bị bỏ (các dòng không dấu câu được nối)
+
+
+def test_trang_doc_them_chi_co_chu_thich_anh_khong_canh_bao_thieu():
+    p10 = "5.天地人\n5. BIA THỬ\nBia chùa X.\nPhiên âm: A\nThiên địa.\nDịch nghĩa: A\nTrời đất.\n"
+    _setup({10: p10, 11: "Bia chùa Khánh Ninh\n"})
+    st = cb.process(5, ROW, MODEL, (11, True))
+    assert st["canh_bao"] == []
+    _setup({10: p10, 11: "Một câu dịch còn dang dở.\n"})                  # trang đọc thêm CÓ văn bản, chưa thấy điểm dừng ⇒ vẫn cảnh báo
+    st = cb.process(5, ROW, MODEL, (11, True))
+    assert any("thiếu đoạn cuối" in c for c in st["canh_bao"])

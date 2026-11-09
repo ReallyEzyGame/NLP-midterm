@@ -11,7 +11,7 @@ stt	doc_id	ten_file	danh_sach_bia_id	so_mat_co_anh	so_mat_theo_sach	trang_sach	s
 13	VBLN-013	02462	02462	1	1	137-143	8	gemini-3.5-flash-lite	-	OK	7	194	0	0	62	NA	592	0	6689	Phien_am	RONG Phien_am (sách không có mục Phiên âm)
 15	VBLN-015	02329-21_02330-22	02329-21|02330-22	2	2	149-154	7	gemini-3.5-flash-lite	-	OK	4	451	26	384	46	0.85	1360	2297	4810	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
 16	VBLN-016	02437-21_02438-22	02437-21|02438-22	2	2	155-158	5	gemini-3.5-flash-lite	-	OK	8	209	18	234	34	1.12	638	1385	2777	-	-
-20	VBLN-020	02444-21_02479-22	02444-21|02479-22	2	2	193-198	7	gemini-3.5-flash-lite	-	OK	2	522	32	445	37	0.85	1568	2716	3066	-	đọc hết tr.199 chưa gặp điểm kết thúc (Hán/tiêu đề bia kế) — có thể thiếu đoạn cuối; TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+20	VBLN-020	02444-21_02479-22	02444-21|02479-22	2	2	193-198	7	gemini-3.5-flash-lite	-	OK	2	522	32	445	36	0.85	1568	2716	3044	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
 21	VBLN-021	02442-21_02443-22	02442-21|02443-22	2	2	199-203	5	gemini-3.5-flash-lite	-	OK	6	249	14	204	12	0.82	753	1238	1539	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
 22	VBLN-022	02440-21_02441-22	02440-21|02441-22	2	2	203-207	6	gemini-3.5-flash-lite	-	OK	4	277	17	335	35	1.21	835	2067	2827	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
 23	VBLN-023	02477-21_02478-22	02477-21|02478-22	2	2	208-212	5	gemini-3.5-flash-lite	-	OK	6	296	18	288	23	0.97	900	1762	2851	-	-
