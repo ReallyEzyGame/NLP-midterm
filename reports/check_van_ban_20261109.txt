@@ -1,0 +1,3 @@
+# check_van_ban_sach 2026-11-09 17:14  dir=data/processed
+# 35 bia × 3 loại = 105 file; 0 lỗi; 2 file rỗng có chủ ý: Phien_am/02462.txt, Chu_Han/02497-21_02498-22.txt
+KẾT QUẢ: ĐẠT (0 lỗi)

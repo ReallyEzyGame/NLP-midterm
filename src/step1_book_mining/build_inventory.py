@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MUC_LUC = ROOT / "data/interim/text_tho/muc_luc_sach.csv"
 OUT = ROOT / "data/metadata/inventory.csv"
+MAP = ROOT / "data/metadata/stt_bia_map.csv"
 BOOK_DIR = "data/raw/sach_scan/STT3_van_bia_lang_nanh/"
 HEADER = ["doc_id", "ten_van_ban", "dinh_dang", "file_nguon", "ghi_chu"]
 
@@ -23,6 +24,10 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     rows_in = list(csv.DictReader(open(MUC_LUC, encoding="utf-8", newline="")))
     n_img = len(list((ROOT / BOOK_DIR).glob("*.jpg")))
+    ids: dict[int, list[str]] = {}
+    if MAP.exists():                                  # tên file ảnh thật (bia_id) của từng mặt — build_stt_bia_map.py
+        for m in csv.DictReader(open(MAP, encoding="utf-8", newline="")):
+            ids.setdefault(int(m["stt"]), []).append(m["bia_id"])
     out = [["VBLN-000",
             "Văn bia làng Nành (Đinh Khắc Thuân khảo cứu, NXB KHXH 2003) - sách scan nhóm 3",
             "anh", BOOK_DIR,
@@ -33,9 +38,13 @@ def main() -> int:
             continue
         stt = int(r["stt"])
         first = r["tr_han_bat_dau"] or r["tr_tieu_de_viet"]
-        note = (f"stt={stt}; ky_hieu={r['ky_hieu_thu_vien']}; so_mat_co_anh={r['so_mat']}; nien_dai={r['nien_dai']}; "
+        ky = " - ".join(x.split("-")[0].lstrip("0") for x in ids[stt]) if ids.get(stt) else r['ky_hieu_thu_vien']   # xlsx + bổ sung
+        so_mat = len(ids[stt]) if ids.get(stt) else r['so_mat']
+        note = (f"stt={stt}; ky_hieu={ky}; so_mat_co_anh={so_mat}; nien_dai={r['nien_dai']}; "
                 f"tr_sach={first}-{r['tr_ket_thuc']}; tr_han={r['tr_han_bat_dau'] or '-'}-{r['tr_han_ket_thuc'] or '-'}; "
                 f"tr_viet={r['tr_tieu_de_viet']}-{r['tr_ket_thuc']}")
+        if ids.get(stt):
+            note += "; bia_id=" + "|".join(ids[stt])
         if r["ghi_chu"]:
             note += f"; CANH_BAO={r['ghi_chu']}"
         out.append([f"VBLN-{stt:03d}", f"{r['ten_bia']} (STT {stt})", "anh", BOOK_DIR, note])

@@ -30,7 +30,7 @@ vanbia-ocr-project/
 │       └── dataset_dich/<bia>.jsonl   # han / phien_am / dich_nghia
 ├── reports/                        # số box, số cặp câu
 ├── src/
-│   ├── step1_book_mining/          # vision_ocr, regex_filter, split_by_bia
+│   ├── step1_book_mining/          # vision_ocr, regex_filter, clean_book_text
 │   ├── step2_stele_ocr/            # download_bia, paddle_detect, filter_boxes, sort_bbox
 │   ├── step3_ocr_align/            # text_aligner (Levenshtein/DP), crop_patches, export_ocr_dataset
 │   ├── step4_trans_align/          # sentence_align (BertAlign), export_dich_dataset
