@@ -21,7 +21,7 @@ vanbia-ocr-project/
 │   │   └── bbox_chuan/<bia>.json   # đã lọc + đúng thứ tự đọc
 │   └── output/
 │       ├── dataset_ocr/
-│       │   └── <Tên bia>/
+│       │   └── <bia>/
 │       │       ├── images/         # cạnh lớn nhất ≤ 1024, .001.jpg
 │       │       ├── patches/        # xoay 90°, cao ≤ 96, .001.001.jpg
 │       │       ├── det_gt.txt
