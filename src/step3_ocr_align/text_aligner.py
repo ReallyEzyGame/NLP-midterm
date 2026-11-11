@@ -427,11 +427,23 @@ def run_align_single(
     search_names.append(base_num)
 
     gt_file: Path | None = None
-    for name in search_names:
-        p = proc / "Chu_Han" / f"{name}.txt"
-        if p.exists():
-            gt_file = p
-            break
+    gt_dir = proc / "Chu_Han"
+    if gt_dir.exists():
+        # 1. Thử tìm khớp tên chính xác
+        for name in search_names:
+            p = gt_dir / f"{name}.txt"
+            if p.exists():
+                gt_file = p
+                break
+
+        # 2. Thử tìm file có chứa mã bia_id hoặc base_num (hỗ trợ quy ước ghép '_' của Tuấn: 02440-21_02441-22.txt)
+        if gt_file is None:
+            for f in gt_dir.glob("*.txt"):
+                parts = f.stem.split("_")
+                if bia_id in parts or base_num in [p.split("-")[0] for p in parts]:
+                    gt_file = f
+                    log.info("Tìm thấy file Chữ Hán khớp theo mã cụm mặt bia: %s -> %s", bia_id, f.name)
+                    break
 
     if gt_file is None:
         log.warning("Không tìm thấy file Chu_Han cho %s trong data/processed/Chu_Han/. Sử dụng chuỗi rỗng.", bia_id)

@@ -294,17 +294,33 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def _find_file(folder: Path, bia_id: str) -> Path | None:
+    if not folder.exists():
+        return None
+    # 1. Khớp chính xác
+    exact = folder / f"{bia_id}.txt"
+    if exact.exists():
+        return exact
+    # 2. Khớp theo mã cụm mặt bia (nối '_', vd 02440-21_02441-22.txt)
+    base_num = bia_id.split("-")[0]
+    for f in folder.glob("*.txt"):
+        parts = f.stem.split("_")
+        if bia_id in parts or base_num in [p.split("-")[0] for p in parts]:
+            return f
+    return None
+
+
 def run_sentence_align_single(bia_id: str, root: Path, aligner: BaseSentenceAligner) -> Path:
     proc = root / "data" / "processed"
     out_dir = root / "data" / "output" / "dataset_dich"
 
-    han_path = proc / "Chu_Han" / f"{bia_id}.txt"
-    pa_path = proc / "Phien_am" / f"{bia_id}.txt"
-    dn_path = proc / "Dich_nghia" / f"{bia_id}.txt"
+    han_path = _find_file(proc / "Chu_Han", bia_id)
+    pa_path = _find_file(proc / "Phien_am", bia_id)
+    dn_path = _find_file(proc / "Dich_nghia", bia_id)
 
-    han_text = han_path.read_text(encoding="utf-8") if han_path.exists() else ""
-    pa_text = pa_path.read_text(encoding="utf-8") if pa_path.exists() else ""
-    dn_text = dn_path.read_text(encoding="utf-8") if dn_path.exists() else ""
+    han_text = han_path.read_text(encoding="utf-8") if (han_path and han_path.exists()) else ""
+    pa_text = pa_path.read_text(encoding="utf-8") if (pa_path and pa_path.exists()) else ""
+    dn_text = dn_path.read_text(encoding="utf-8") if (dn_path and dn_path.exists()) else ""
 
     pairs = align_translation_dataset(bia_id, han_text, pa_text, dn_text, aligner)
     out_file = export_translation_dataset(bia_id, pairs, out_dir)
