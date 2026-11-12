@@ -15,3 +15,9 @@ tasks_sheet.csv
 *.jpg
 *.jpeg
 *.png
+
+# Local chat & context notes
+Nhom3.txt
+prjGK_CV11_5nhom.txt
+*_notes.txt
+chat_*.txt

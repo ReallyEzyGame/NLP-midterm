@@ -1,10 +1,12 @@
-"""Bộ công cụ Gióng hàng Văn bia Hán Nôm - Phiên bản Tối ưu v2.1 (Step 4 Hiệu chuẩn).
+"""Bộ công cụ Gióng hàng Văn bia Hán Nôm - Phiên bản Tối ưu v2.2 (Task 1.C Hiệu chuẩn thực tế).
 
-Nâng cấp Step 4:
-1. Tự động đọc cấu hình tham số từ configs/config.yml.
-2. Tích hợp Confidence Scorer tính điểm tin cậy tổng hợp (Composite Score).
-3. Hệ thống cờ chẩn đoán chi tiết (Diagnostic Flags) lưu vào trường 'note'.
-4. Cơ chế chống trôi con trỏ (Anti-Drift) và Lookahead Anchor Recovery.
+Nâng cấp v2.2 từ dữ liệu thực tế (Task 1.C):
+1. Chuẩn hóa Dị thể / Giản-Phồn thể / Chữ số kép trên đá (HAN_VARIANT_MAP).
+2. Hỗ trợ Trán bia bị PaddleOCR đọc ngược chiều (Phải -> Trái vs Trái -> Phải).
+3. Cơ chế Neo đa mặt bia & Tự đồng bộ lại (Multi-Face Global Anchor Recovery):
+   - Tự định vị đúng mặt bia (vd 02459-31, 02460-32, 02461-33) trong file gộp của sách (Tuấn 1.A).
+   - Bảo vệ box ngắn (tên công đức 2-4 chữ) khỏi khớp nhầm dây chuyền (Short-Box Guard).
+   - Nhận diện và gióng chuẩn các đoạn bị OCR sách đảo dòng (Out-of-order Book OCR).
 """
 from __future__ import annotations
 
@@ -21,7 +23,6 @@ from src.step3_ocr_align.align_schema import (
     WILDCARD_CHARS,
     AlignItem,
     AlignResult,
-    AlignStatus,
     sanitize_text,
     validate_raw_bbox_input,
 )
@@ -36,8 +37,122 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # =============================================================================
-# 0. ĐỌC CẤU HÌNH (CONFIG LOADER)
+# 0. BẢNG TƯƠNG ĐƯƠNG DỊ THỂ / CHỮ KÉP HÁN NÔM & CẤU HÌNH
 # =============================================================================
+
+_VARIANT_GROUPS = (
+    "後后",
+    "修脩",
+    "為爲",
+    "顯顕",
+    "鐵鉄",
+    "稱称",
+    "盡尽",
+    "對対",
+    "窮穷",
+    "恆恒",
+    "萬万",
+    "參参",
+    "監鑒",
+    "橫横",
+    "諡謚",
+    "吳吴",
+    "黃黄",
+    "歸帰",
+    "國国",
+    "門门",
+    "禮礼",
+    "壽寿",
+    "與与",
+    "無无",
+    "當当",
+    "從从",
+    "傳传",
+    "廣广",
+    "靈霊",
+    "聖圣",
+    "榮荣",
+    "華华",
+    "會会",
+    "衆眾众",
+    "祿禄",
+    "宮宫",
+    "寶宝",
+    "處処",
+    "實实",
+    "歲歳",
+    "應応",
+    "樂楽",
+    "曆歷历",
+    "龜龟",
+    "彌弥",
+    "廟庙",
+    "臺台",
+    "餘余",
+    "關关",
+    "發发",
+    "書书",
+    "寫写",
+    "畫画",
+    "壇坛",
+    "鐘鍾钟",
+    "區区",
+    "圖图",
+    "團团",
+    "壓压",
+    "壞坏",
+    "聲声",
+    "學学",
+    "體体",
+    "點点",
+    "齊齐",
+    "齒齿",
+    "龍龙",
+    "總総总",
+    "邊边",
+    "戶戸",
+    "鄉郷",
+    "來来",
+    "經经",
+    "義义",
+    "啟啓",
+    "羣群",
+    "眞真",
+    "內内",
+    "旣既",
+    "卽即",
+    "德徳",
+    "供洪",
+    # Chữ số kép trên văn bia cổ <-> chữ số thường trong sách (như Tuấn báo cáo ở BAO_CAO_1A)
+    "一壹",
+    "二貳",
+    "三叄叁",
+    "四肆",
+    "五伍",
+    "六陸",
+    "七柒",
+    "八捌",
+    "九玖",
+    "十拾",
+    "百佰",
+    "千仟",
+)
+
+HAN_VARIANT_MAP: dict[str, str] = {}
+for _grp in _VARIANT_GROUPS:
+    _canon = _grp[0]
+    for _ch in _grp:
+        HAN_VARIANT_MAP[_ch] = _canon
+
+
+def normalize_han_char(ch: str) -> str:
+    """Chuẩn hóa ký tự Hán Nôm về dạng đại diện khi so khớp dị thể/chữ kép."""
+    return HAN_VARIANT_MAP.get(ch, ch)
+
+
+def normalize_han_str(text: str) -> str:
+    return "".join(normalize_han_char(c) for c in text)
+
 
 def load_aligner_config(root: Path = REPO_ROOT) -> dict[str, Any]:
     """Đọc cấu hình từ configs/config.yml nếu có, hoặc trả về giá trị mặc định chuẩn."""
@@ -54,6 +169,7 @@ def load_aligner_config(root: Path = REPO_ROOT) -> dict[str, Any]:
 
     try:
         import yaml
+
         with open(cfg_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
             if data and "aligner" in data:
@@ -101,10 +217,12 @@ def extract_title_and_body(gt_text: str) -> tuple[str, str]:
 # =============================================================================
 
 def char_similarity(ocr_c: str, gt_c: str) -> float:
-    """Đo độ tương đồng giữa 2 ký tự (có hỗ trợ wildcard)."""
+    """Đo độ tương đồng giữa 2 ký tự (hỗ trợ wildcard và dị thể Hán Nôm)."""
     if ocr_c == gt_c:
         return 1.0
     if ocr_c in WILDCARD_CHARS or gt_c in WILDCARD_CHARS:
+        return 1.0
+    if normalize_han_char(ocr_c) == normalize_han_char(gt_c):
         return 1.0
     return 0.0
 
@@ -116,7 +234,7 @@ def semi_global_align(
     mismatch_penalty: float = -1.0,
     gap_penalty: float = -1.5,
 ) -> tuple[str, float, int, int]:
-    """Thuật toán Semi-Global (Fitting Alignment) có hỗ trợ Wildcard:
+    """Thuật toán Semi-Global (Fitting Alignment) có hỗ trợ Wildcard & Dị thể:
     Tìm đoạn con tối ưu nhất trong gt_str khớp với ocr_str.
     Trả về (matched_gt, similarity_ratio, start_idx, end_idx).
     """
@@ -128,14 +246,23 @@ def semi_global_align(
     for i in range(1, n + 1):
         dp[i][0] = i * gap_penalty
 
+    norm_ocr = [normalize_han_char(c) for c in ocr_str]
+    norm_gt = [normalize_han_char(c) for c in gt_str]
+
     for i in range(1, n + 1):
+        oc = ocr_str[i - 1]
+        noc = norm_ocr[i - 1]
+        oc_wild = oc in WILDCARD_CHARS
+        dp_prev = dp[i - 1]
+        dp_curr = dp[i]
         for j in range(1, m + 1):
-            s = match_score if char_similarity(ocr_str[i - 1], gt_str[j - 1]) > 0.0 else mismatch_penalty
-            dp[i][j] = max(
-                dp[i - 1][j - 1] + s,
-                dp[i - 1][j] + gap_penalty,
-                dp[i][j - 1] + gap_penalty,
-            )
+            gc = gt_str[j - 1]
+            is_match = oc_wild or noc == norm_gt[j - 1] or (gc in WILDCARD_CHARS)
+            s = match_score if is_match else mismatch_penalty
+            diag = dp_prev[j - 1] + s
+            up = dp_prev[j] + gap_penalty
+            left = dp_curr[j - 1] + gap_penalty
+            dp_curr[j] = diag if (diag >= up and diag >= left) else (up if up >= left else left)
 
     best_j = max(range(m + 1), key=lambda j: dp[n][j])
 
@@ -144,10 +271,11 @@ def semi_global_align(
     matches = 0
 
     while i > 0 and j > 0:
-        s = match_score if char_similarity(ocr_str[i - 1], gt_str[j - 1]) > 0.0 else mismatch_penalty
+        is_match = char_similarity(ocr_str[i - 1], gt_str[j - 1]) > 0.0
+        s = match_score if is_match else mismatch_penalty
         if dp[i][j] == dp[i - 1][j - 1] + s:
             al_gt.append(gt_str[j - 1])
-            if s == match_score:
+            if is_match:
                 matches += 1
             i -= 1
             j -= 1
@@ -168,8 +296,17 @@ def semi_global_align(
     return matched_gt, round(min(1.0, max(0.0, sim)), 4), start_idx, end_idx
 
 
+def _has_bigram_hit(probe: str, target: str) -> bool:
+    """Lọc nhanh trước khi quét toàn văn bản: ít nhất một cặp 2 chữ liên tiếp khớp (có chuẩn hóa dị thể)."""
+    np_str = normalize_han_str(probe)
+    nt_str = normalize_han_str(target)
+    if len(np_str) < 2:
+        return np_str in nt_str
+    return any(np_str[k : k + 2] in nt_str for k in range(len(np_str) - 1))
+
+
 # =============================================================================
-# 3. LỚP ALIGNER CƠ SỞ & NÂNG CẤP V2.1 (STEP 4)
+# 3. LỚP ALIGNER CƠ SỞ & NÂNG CẤP V2.2 (TASK 1.C)
 # =============================================================================
 
 class BaseAligner(ABC):
@@ -191,8 +328,44 @@ class BaseAligner(ABC):
     def align_sequence(self, ocr_text: str, gt_text: str) -> tuple[str, float, int, int]:
         pass
 
+    def _build_item(
+        self,
+        order: int,
+        ocr: str,
+        gt_matched: str,
+        char_sim: float,
+        box_conf: float,
+        region: str,
+        extra_note: str = "",
+    ) -> AlignItem:
+        comp_score = compute_composite_score(
+            char_sim=char_sim,
+            ocr_len=len(ocr),
+            gt_len=len(gt_matched),
+            ocr_conf=box_conf,
+            weights=self.composite_weights,
+        )
+        status, note = diagnose_alignment(
+            ocr_text=ocr,
+            gt_text=gt_matched,
+            char_sim=char_sim,
+            composite_score=comp_score,
+            threshold=self.threshold,
+            min_reliable_score=self.min_reliable_score,
+        )
+        full_note = f"{extra_note} | {note}" if extra_note else note
+        return AlignItem(
+            order=order,
+            text_ocr=ocr,
+            text_gt=gt_matched,
+            score=comp_score,
+            status=status,
+            region=region,
+            note=full_note,
+        )
+
     def align(self, bia_id: str, boxes: list[dict], gt_text: str) -> AlignResult:
-        """Thực hiện gióng hàng thông minh với cơ chế chống trôi con trỏ & Hiệu chuẩn điểm tin cậy."""
+        """Thực hiện gióng hàng hỗ trợ đa mặt bia, chống trôi con trỏ & phục hồi neo."""
         sorted_boxes = sorted(boxes, key=lambda b: b.get("order", 0))
         tran_boxes = [b for b in sorted_boxes if b.get("region") == "tran"]
         than_boxes = [b for b in sorted_boxes if b.get("region") != "tran"]
@@ -203,52 +376,46 @@ class BaseAligner(ABC):
 
         items: list[AlignItem] = []
 
-        # 1. Gióng vùng Trán bia (nếu có)
+        # 1. Gióng vùng Trán bia (hỗ trợ tiêu đề đọc ngược Trái<->Phải của PaddleOCR)
         for b in tran_boxes:
             ocr = sanitize_text(b.get("text_ocr", ""))
             box_conf = float(b.get("score", 0.90))
             matched_gt, char_sim, _, _ = self.align_sequence(ocr, title_gt)
 
-            comp_score = compute_composite_score(
-                char_sim=char_sim,
-                ocr_len=len(ocr),
-                gt_len=len(matched_gt),
-                ocr_conf=box_conf,
-                weights=self.composite_weights,
-            )
-            status, note = diagnose_alignment(
-                ocr_text=ocr,
-                gt_text=matched_gt,
-                char_sim=char_sim,
-                composite_score=comp_score,
-                threshold=self.threshold,
-                min_reliable_score=self.min_reliable_score,
-            )
+            note_prefix = "Trán bia"
+            if len(ocr) > 1:
+                rev_gt, rev_sim, _, _ = self.align_sequence(ocr[::-1], title_gt)
+                if rev_sim > char_sim:
+                    matched_gt, char_sim = rev_gt, rev_sim
+                    note_prefix = "Trán bia (Đảo chiều OCR)"
+
             items.append(
-                AlignItem(
+                self._build_item(
                     order=b["order"],
-                    text_ocr=ocr,
-                    text_gt=matched_gt,
-                    score=comp_score,
-                    status=status,
+                    ocr=ocr,
+                    gt_matched=matched_gt,
+                    char_sim=char_sim,
+                    box_conf=box_conf,
                     region="tran",
-                    note=f"Trán bia | {note}",
+                    extra_note=note_prefix,
                 )
             )
 
-        # 2. Gióng vùng Thân bia với cơ chế Chống Trôi Con Trỏ & Lookahead
+        # 2. Gióng vùng Thân bia với Multi-Face Re-Anchoring & Anti-Drift
         body_clean = clean_gt_text(body_gt)
         curr_gt_idx = 0
+        has_anchored = False
 
         for idx, b in enumerate(than_boxes):
             ocr = sanitize_text(b.get("text_ocr", ""))
+            ocr_clean = clean_gt_text(ocr)
             box_conf = float(b.get("score", 0.90))
 
-            if not ocr:
+            if not ocr or not ocr_clean:
                 items.append(
                     AlignItem(
                         order=b["order"],
-                        text_ocr="",
+                        text_ocr=ocr,
                         text_gt="",
                         score=0.0,
                         status="needs_review",
@@ -258,20 +425,30 @@ class BaseAligner(ABC):
                 )
                 continue
 
-            # Cửa sổ tìm kiếm trượt
-            window_size = max(len(ocr) + 12, int(len(ocr) * 2.5))
+            # Bảo vệ box ngắn (tên công đức 2-4 chữ): yêu cầu độ khớp cao hơn tránh khớp bừa
+            is_short = len(ocr_clean) <= 4
+            local_min_sim = 0.70 if is_short else self.min_reliable_score
+
+            window_size = max(len(ocr_clean) + 14, int(len(ocr_clean) * 2.5))
             candidate_gt = body_clean[curr_gt_idx : curr_gt_idx + window_size]
 
-            matched_gt, char_sim, start_offset, end_offset = self.align_sequence(ocr, candidate_gt)
+            matched_gt, char_sim, start_offset, end_offset = self.align_sequence(ocr_clean, candidate_gt)
+            len_ok = len(matched_gt) >= max(1, int(len(ocr_clean) * 0.55))
 
-            # KIỂM TRA LOOKAHEAD: Nếu score quá thấp, kiểm tra xem box kế tiếp có match ngay tại curr_gt_idx không
-            if char_sim < self.min_reliable_score and (idx + 1 < len(than_boxes)):
-                next_ocr = sanitize_text(than_boxes[idx + 1].get("text_ocr", ""))
+            if char_sim >= local_min_sim and len_ok:
+                advance = end_offset if end_offset > 0 else max(1, len(matched_gt))
+                curr_gt_idx += advance
+                has_anchored = True
+                items.append(self._build_item(b["order"], ocr, matched_gt, char_sim, box_conf, "than"))
+                continue
+
+            # Thử Anti-Drift Lookahead: chỉ kích hoạt khi ĐÃ neo và box hiện tại nhỏ/nhiễu xen ngang
+            if has_anchored and is_short and (idx + 1 < len(than_boxes)):
+                next_ocr = clean_gt_text(sanitize_text(than_boxes[idx + 1].get("text_ocr", "")))
                 if next_ocr:
-                    next_cand = body_clean[curr_gt_idx : curr_gt_idx + max(len(next_ocr) + 12, int(len(next_ocr) * 2.5))]
-                    _, next_sim, _, _ = self.align_sequence(next_ocr, next_cand)
-                    if next_sim >= self.threshold:
-                        # Box hiện tại là box rác chèn vào -> KHÔNG tăng con trỏ curr_gt_idx!
+                    n_win = max(len(next_ocr) + 14, int(len(next_ocr) * 2.5))
+                    _, next_sim, _, _ = self.align_sequence(next_ocr, body_clean[curr_gt_idx : curr_gt_idx + n_win])
+                    if next_sim >= max(0.70, self.threshold):
                         items.append(
                             AlignItem(
                                 order=b["order"],
@@ -280,43 +457,66 @@ class BaseAligner(ABC):
                                 score=round(char_sim, 4),
                                 status="needs_review",
                                 region="than",
-                                note="DEBRIS_SUSPECTED (Phát hiện Box rác/nhiễu viền, Anti-Drift kích hoạt)",
+                                note="DEBRIS_SUSPECTED (Anti-Drift: Box nhiễu chèn giữa)",
                             )
                         )
                         continue
 
-            # Cập nhật con trỏ đọc trên chuỗi GT nếu điểm số đạt độ tin cậy
-            if char_sim >= self.min_reliable_score:
-                advance = end_offset if end_offset > 0 else max(1, len(matched_gt))
-                curr_gt_idx += advance
+            # Phục hồi neo tiến tới (Forward Re-anchoring) cho văn bản nhiều mặt bia / sau đoạn bị lược bỏ
+            reanchored = False
+            forward_slice = body_clean[curr_gt_idx:]
+            if len(ocr_clean) >= 6 and len(forward_slice) > window_size and _has_bigram_hit(ocr_clean, forward_slice):
+                fw_gt, fw_sim, fw_s, fw_e = self.align_sequence(ocr_clean, forward_slice)
+                if fw_sim >= 0.65 and len(fw_gt) >= int(len(ocr_clean) * 0.60):
+                    curr_gt_idx += fw_e
+                    has_anchored = True
+                    reanchored = True
+                    note_tag = "MULTI_FACE_ANCHOR" if fw_s > 0 else ""
+                    items.append(self._build_item(b["order"], ocr, fw_gt, fw_sim, box_conf, "than", note_tag))
 
-            # Tính điểm tổng hợp và chẩn đoán
-            final_gt = matched_gt if char_sim >= self.min_reliable_score else ""
-            comp_score = compute_composite_score(
-                char_sim=char_sim,
-                ocr_len=len(ocr),
-                gt_len=len(final_gt),
-                ocr_conf=box_conf,
-                weights=self.composite_weights,
-            )
-            status, note = diagnose_alignment(
-                ocr_text=ocr,
-                gt_text=final_gt,
-                char_sim=char_sim,
-                composite_score=comp_score,
-                threshold=self.threshold,
-                min_reliable_score=self.min_reliable_score,
-            )
+            if reanchored:
+                continue
 
+            # Thử Probe 2 box liên tiếp (hữu ích khi chuyển vào đoạn thơ/cột ngắn 4 chữ như '天開南越'+'地闢北京')
+            if len(ocr_clean) >= 2 and (idx + 1 < len(than_boxes)):
+                next_ocr = clean_gt_text(sanitize_text(than_boxes[idx + 1].get("text_ocr", "")))
+                probe = ocr_clean + next_ocr
+                if len(probe) >= 7 and len(forward_slice) > len(probe) and _has_bigram_hit(probe, forward_slice):
+                    p_gt, p_sim, p_s, _ = self.align_sequence(probe, forward_slice)
+                    if p_sim >= 0.78 and len(p_gt) >= int(len(probe) * 0.75):
+                        anchor_slice = forward_slice[p_s : p_s + len(ocr_clean) + 6]
+                        a_gt, a_sim, _, a_e = self.align_sequence(ocr_clean, anchor_slice)
+                        if a_sim >= 0.70:
+                            curr_gt_idx += p_s + a_e
+                            has_anchored = True
+                            items.append(
+                                self._build_item(b["order"], ocr, a_gt, a_sim, box_conf, "than", "PROBE_2BOX_ANCHOR")
+                            )
+                            continue
+
+            # Dự phòng văn bản sách bị OCR đảo thứ tự dòng (Out-of-order fallback trước curr_gt_idx)
+            if curr_gt_idx > 0 and len(ocr_clean) >= 8:
+                prefix_slice = body_clean[:curr_gt_idx]
+                if _has_bigram_hit(ocr_clean, prefix_slice):
+                    bw_gt, bw_sim, _, _ = self.align_sequence(ocr_clean, prefix_slice)
+                    if bw_sim >= 0.72 and len(bw_gt) >= int(len(ocr_clean) * 0.70):
+                        items.append(
+                            self._build_item(
+                                b["order"], ocr, bw_gt, bw_sim, box_conf, "than", "OUT_OF_ORDER_BOOK_SHUFFLE"
+                            )
+                        )
+                        continue
+
+            # Không khớp được: giữ nguyên con trỏ curr_gt_idx, đánh dấu needs_review
             items.append(
-                AlignItem(
+                self._build_item(
                     order=b["order"],
-                    text_ocr=ocr,
-                    text_gt=final_gt,
-                    score=comp_score,
-                    status=status,
+                    ocr=ocr,
+                    gt_matched="",
+                    char_sim=0.0,
+                    box_conf=box_conf,
                     region="than",
-                    note=note,
+                    extra_note="NOT_IN_BOOK_OR_LOW_MATCH",
                 )
             )
 
@@ -324,7 +524,7 @@ class BaseAligner(ABC):
 
 
 class DynamicProgrammingAligner(BaseAligner):
-    """Thuật toán Semi-Global DP (Fitting Alignment) hỗ trợ Wildcard."""
+    """Thuật toán Semi-Global DP (Fitting Alignment) hỗ trợ Wildcard & Dị thể."""
 
     def align_sequence(self, ocr_text: str, gt_text: str) -> tuple[str, float, int, int]:
         ocr_clean = clean_gt_text(ocr_text)
@@ -354,7 +554,7 @@ class FastHeuristicAligner(BaseAligner):
 
         target_len = len(ocr_clean)
         cand = gt_clean[:target_len]
-        sm = SequenceMatcher(None, ocr_clean, cand)
+        sm = SequenceMatcher(None, normalize_han_str(ocr_clean), normalize_han_str(cand))
         score = sm.ratio()
         return cand, round(score, 4), 0, target_len
 
@@ -405,6 +605,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def find_gt_file_for_bia(bia_id: str, gt_dir: Path, doc_id: str | None = None) -> Path | None:
+    """Tìm file Chu_Han khớp với bia_id (hỗ trợ cả file đơn lẻ và file ghép mã '_') của Tuấn."""
+    if not gt_dir.exists():
+        return None
+    search_names = [bia_id]
+    if doc_id:
+        search_names.insert(0, doc_id)
+    base_num = bia_id.split("-")[0]
+    search_names.append(base_num)
+
+    for name in search_names:
+        p = gt_dir / f"{name}.txt"
+        if p.exists():
+            return p
+
+    for f in sorted(gt_dir.glob("*.txt")):
+        parts = f.stem.split("_")
+        if bia_id in parts or base_num in [p.split("-")[0] for p in parts]:
+            return f
+    return None
+
+
 def run_align_single(
     bia_id: str,
     root: Path,
@@ -420,30 +642,8 @@ def run_align_single(
     bb_data = fio.read_json(bb_path)
     validate_raw_bbox_input(bb_data, bb_path)
 
-    search_names = [bia_id]
-    if doc_id:
-        search_names.insert(0, doc_id)
-    base_num = bia_id.split("-")[0]
-    search_names.append(base_num)
-
-    gt_file: Path | None = None
     gt_dir = proc / "Chu_Han"
-    if gt_dir.exists():
-        # 1. Thử tìm khớp tên chính xác
-        for name in search_names:
-            p = gt_dir / f"{name}.txt"
-            if p.exists():
-                gt_file = p
-                break
-
-        # 2. Thử tìm file có chứa mã bia_id hoặc base_num (hỗ trợ quy ước ghép '_' của Tuấn: 02440-21_02441-22.txt)
-        if gt_file is None:
-            for f in gt_dir.glob("*.txt"):
-                parts = f.stem.split("_")
-                if bia_id in parts or base_num in [p.split("-")[0] for p in parts]:
-                    gt_file = f
-                    log.info("Tìm thấy file Chữ Hán khớp theo mã cụm mặt bia: %s -> %s", bia_id, f.name)
-                    break
+    gt_file = find_gt_file_for_bia(bia_id=bia_id, gt_dir=gt_dir, doc_id=doc_id)
 
     if gt_file is None:
         log.warning("Không tìm thấy file Chu_Han cho %s trong data/processed/Chu_Han/. Sử dụng chuỗi rỗng.", bia_id)

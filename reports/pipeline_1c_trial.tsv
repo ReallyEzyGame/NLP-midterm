@@ -1,0 +1,4 @@
+bia_id	gt_file	raw_boxes	dropped_debris	kept_boxes	tran_boxes	than_boxes	ok_count	review_count	ok_rate_pct	avg_score
+02459-31	02459-31_02460-32_02461-33.txt	58	5	53	4	49	35	18	66.0	0.6920
+02460-32	02459-31_02460-32_02461-33.txt	14	5	9	0	9	9	0	100.0	0.9505
+02461-33	02459-31_02460-32_02461-33.txt	42	5	37	0	37	4	33	10.8	0.1769
