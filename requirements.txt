@@ -8,6 +8,11 @@ pandas==3.1.1
 PyYAML==6.0.3
 regex==2026.9.29
 RapidFuzz==3.14.6
+paddleocr>=3.0.0
+paddlepaddle==3.3
+
+bertalign==2.0.1
+sentence-transformers==6.3.0
 
 # OCR cục bộ (dự phòng; dùng để định vị tiêu đề/nhãn toàn sách)
 rapidocr==3.10.0
