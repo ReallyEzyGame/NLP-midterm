@@ -2,7 +2,7 @@
 
 Được ``clean_book_text.py`` gọi. Mọi quy ước còn chờ nhóm chốt (Q1–Q13) được gom thành hằng số ở đầu file
 để đổi một chỗ:
-  * ``ORNAMENT``  — ký hiệu trang trí ``○`` và chuỗi ``。。`` (Q3: đề xuất bỏ);
+  * ``ORNAMENT``  — ký hiệu trang trí ``○`` (bỏ); ``HAN_GAP``/``VIET_GAP`` — dấu chữ mất/sách lược → ``MASK``;
   * ``HAN_PUNCT`` — dấu câu của sách được giữ trong ``Chu_Han``;
   * ``HAN_CUT``   — dấu mà sau đó cắt dòng ``Chu_Han``.
 """
@@ -17,7 +17,14 @@ import regex
 HAN = regex.compile(r"\p{Han}")
 HAN_PUNCT = "。，、；：？！"
 HAN_CUT = "。！？；"
-ORNAMENT = re.compile(r"[○◯]+|。{2,}")          # Q3 (đề xuất): bỏ
+ORNAMENT = re.compile(r"[○◯]+")                 # Q3: ký hiệu trang trí → bỏ
+# Chữ mất / đoạn sách lược (giảng viên 14/11/2026: "[...] là những từ bị mất mà tác giả không biết, để chữ MASK").
+# Sách Làng Nành in trong phần Hán: `。。。` giữa câu (đã xem ảnh tr.208, 238, 384) và `？` = 1 chữ không đọc được;
+# phần Việt: `...` và `(?)`. Trước đây `。{2,}` bị coi là hoa văn và xoá → Chu_Han mất hết dấu chữ mất.
+MASK = "MASK"
+_MASK_PH = ""                              # giữ chỗ 1 ký tự trong lúc lọc ký tự Hán, đổi lại thành MASK cuối cùng
+HAN_GAP = re.compile(r"。?[。．]{2,}")           # `。。。` / `．．．`; `。。。。` = hết câu + lược → giữ 1 `。`
+VIET_GAP = re.compile(r"\(\s*\?\s*\)|\.{3}|…")   # `(?)` / `...` (`....` = lược + dấu chấm câu)
 BULLET = re.compile(r"^[-–—•]\s+")
 LABEL_PHIEN_AM = re.compile(r"(?i)^\s*phiên\s*âm\s*:\s*(.*)$")
 LABEL_DICH_NGHIA = re.compile(r"(?i)^\s*dịch\s*nghĩa\s*:\s*(.*)$")
@@ -67,7 +74,7 @@ def strip_han_title_number(line: str) -> str:
 
 
 # Dấu câu ASCII/nửa khổ do OCR trả ra → dấu toàn khổ của sách (chuẩn hoá chung, không đoán chữ)
-HAN_PUNCT_MAP = str.maketrans({",": "，", ".": "。", ";": "；", ":": "：", "?": "？", "!": "！", "､": "、", "｡": "。"})
+HAN_PUNCT_MAP = str.maketrans({",": "，", ".": "。", "．": "。", ";": "；", ":": "：", "?": "？", "!": "！", "､": "、", "｡": "。"})
 
 
 def clean_han(text: str) -> tuple[str, list[str]]:
@@ -79,15 +86,24 @@ def clean_han(text: str) -> tuple[str, list[str]]:
         removed.append(m.group(0))
         return ""
 
-    s = ORNAMENT.sub(drop, nfc(text).translate(HAN_PUNCT_MAP))
-    s = re.sub(r"\s+", "", s)
+    # bỏ khoảng trắng TRƯỚC khi nhận dấu lược: Gemini ghi `乎 。 。 。 封` (có cách) — trước đây regex không bắt được,
+    # rồi split_han cắt tại mỗi `。` → các dòng chỉ có `。` (bia 28)
+    s = re.sub(r"\s+", "", ORNAMENT.sub(drop, nfc(text).translate(HAN_PUNCT_MAP)))
+    s = HAN_GAP.sub(lambda m: ("。" if m.group(0).startswith("。") and len(m.group(0)) >= 4 else "") + _MASK_PH, s)
+    s = s.replace("？", _MASK_PH)                 # `？` trong phần Hán của sách = 1 chữ không đọc được
     keep = []
     for ch in s:
-        if HAN.match(ch) or ch in HAN_PUNCT:
+        if HAN.match(ch) or ch in HAN_PUNCT or ch == _MASK_PH:
             keep.append(ch)
         else:
             removed.append(ch)
-    return "".join(keep), removed
+    return "".join(keep).replace(_MASK_PH, MASK), removed
+
+
+def mask_viet(sent: str) -> str:
+    """`...` / `…` / `(?)` → MASK trong một câu Phiên âm/Dịch nghĩa (gọi SAU khi cắt câu để giữ cách cắt câu cũ)."""
+    s = re.sub(r" {2,}", " ", VIET_GAP.sub(f" {MASK} ", sent))
+    return re.sub(r" ([,.;:!?)\]])", r"\1", s).strip()
 
 
 def han_paragraphs(lines: list[str]) -> list[str]:
@@ -225,7 +241,7 @@ def viet_items(lines: list[str], log: list[str] | None = None) -> list[str]:
     out: list[str] = []
     for p in paras:
         for sent in split_sentences(clean_viet(" ".join(p), log)):
-            sent = BULLET.sub("", sent).strip()
+            sent = mask_viet(BULLET.sub("", sent).strip())
             if sent:
                 out.append(sent)
     return out

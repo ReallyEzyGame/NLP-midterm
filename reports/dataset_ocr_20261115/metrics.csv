@@ -1,0 +1,10 @@
+buoc,box,ok,M1_ok_rate,M2_phu_sach,M3_chu_co_nhan,M5_cer_trung_vi,ok_chi_MASK
+paddle_raw_2560,2047,694,0.339,0.6407,10900,0.0833,45
+rapid_inv_clahe_tile,2333,721,0.309,0.6193,10510,0.1053,40
+paddle_inv_clahe_tile,2360,805,0.3411,0.6608,11241,0.0811,30
+paddle_inv_clahe_tile_3200,2308,781,0.3384,0.6487,11033,0.0833,46
+paddle_raw_tile,2266,782,0.3451,0.64,10892,0.0833,45
+paddle_raw_tile_3200,2306,782,0.3391,0.644,10946,0.0769,50
+gop_theo_mat,2292,804,0.3508,0.6955,11852,0.0833,46
++ MASK sach khong chep,2292,1054,0.4599,0.6955,11852,0.0833,296
++ xu ly needs_review (cuoi),2292,1905,0.8312,0.6964,11877,0.0833,1131

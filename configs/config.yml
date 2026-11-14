@@ -7,7 +7,7 @@ dataset:
   jpeg_quality: 95
 
 aligner:
-  algo: "dp"                # "dp" (Semi-Global Fitting Alignment) hoặc "heuristic"
+  algo: "v3"                # "v3" (neo toàn cục + chain DP + MASK, mặc định từ 15/11/2026), "dp" (v2.2), "heuristic"
   threshold: 0.80           # Ngưỡng hiệu chuẩn Task 1.C (khớp Data Contract Mục 6, chống lọt tên ngắn 2/3 chữ)
   min_reliable_score: 0.40  # Ngưỡng nhận diện box rác/nhiễu viền (Anti-drift)
   

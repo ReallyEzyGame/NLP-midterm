@@ -18,6 +18,9 @@ sentence-transformers==6.3.0
 rapidocr==3.10.0
 onnxruntime==1.31.1
 
+# Điều khiển Jupyter trên Colab để chạy PaddleOCR GPU (src/step2_stele_ocr/colab/colab_exec.py)
+websockets==17.4
+
 # OCR sách: Google AI Studio (Gemini API) — đã chốt gemini-3.5-flash-lite.
 # Key đọc từ file ngoài repo qua biến môi trường GEMINI_API_KEY_FILE (chỉ chứa đường dẫn). KHÔNG commit key.
 google-genai==3.0.0

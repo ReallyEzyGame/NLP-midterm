@@ -144,6 +144,15 @@ for _grp in _VARIANT_GROUPS:
     for _ch in _grp:
         HAN_VARIANT_MAP[_ch] = _canon
 
+# Dị thể bổ sung gặp trên dữ liệu thật 76 mặt (debug 14/11/2026). Nhóm có chữ đã nằm trong bảng trên → NỐI vào nhóm đó
+# (giữ dạng đại diện cũ), không tạo nhóm mới đè lên.
+_EXTRA_VARIANT_GROUPS = ("黨党", "鄉鄕", "戶户戸", "鑒鉴", "敘叙", "並并", "茲兹", "穀糓", "牀床", "爾尒", "決决", "況况",
+                         "淨净", "凉涼", "册冊", "徳德", "冲沖", "沒没", "惠恵", "藏蔵", "恭㳟", "顏顔", "姊姉", "曾曽")
+for _grp in _EXTRA_VARIANT_GROUPS:
+    _canon = next((HAN_VARIANT_MAP[c] for c in _grp if c in HAN_VARIANT_MAP), _grp[0])
+    for _ch in _grp:
+        HAN_VARIANT_MAP[_ch] = _canon
+
 
 def normalize_han_char(ch: str) -> str:
     """Chuẩn hóa ký tự Hán Nôm về dạng đại diện khi so khớp dị thể/chữ kép."""
@@ -573,6 +582,15 @@ def get_aligner(
     weights = cfg.get("weights", {"match_score": 2.0, "mismatch_penalty": -1.0, "gap_penalty": -1.5})
     comp_weights = cfg.get("composite_weights", {"char_sim": 0.70, "len_ratio": 0.20, "ocr_conf": 0.10})
 
+    if use_algo == "v3":
+        from src.step3_ocr_align.aligner_v3 import AlignerV3      # import trễ: aligner_v3 import module này
+
+        return AlignerV3(
+            threshold=use_threshold,
+            min_reliable_score=min_rel,
+            composite_weights=comp_weights,
+            weights=weights,
+        )
     if use_algo in ("dp", "needleman_wunsch", "semi_global"):
         return DynamicProgrammingAligner(
             threshold=use_threshold,

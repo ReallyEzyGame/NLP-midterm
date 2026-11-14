@@ -1,5 +1,10 @@
 """Bộ công cụ Gióng hàng Câu Song ngữ (Sentence Aligner) cho Dataset 2 (Dịch nghĩa).
 
+⚠ ĐÃ THAY bằng `src/step4_trans_align/build_dataset_dich.py` (15/11/2026): module này giữ lại cho test cũ/tham chiếu.
+Không chạy CLI của module này để ra dataset nộp: nó ghi đè data/output/dataset_dich bằng schema cũ (`sentence_id`,
+không `status`), score hằng số; nhánh BertAlign không chạy (thư viện chưa cài, `_embed_model` không được tạo khi import
+bertalign thành công) nên thực chất là DP theo độ dài.
+
 Phiên bản v2.0 (Step 5 - Kiến trúc Kép Dual-Engine):
 1. Engine 1 - Neural BertAlign / Embedding:
    - Sử dụng multilingual sentence embedding (mBERT/LaBSE/multilingual-e5) đo khoảng cách Cosine.

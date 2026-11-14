@@ -187,7 +187,8 @@ def image_size(path: Path) -> tuple[int, int] | None:
 
 
 def non_han_codes(text: str) -> list[str]:
-    bad = sorted({c for c in text if not HAN_OK.fullmatch(c)})
+    # "MASK" = chữ mất / sách lược / sách không chép (giảng viên 14/11/2026) — token hợp lệ trong nhãn
+    bad = sorted({c for c in text.replace("MASK", "") if not HAN_OK.fullmatch(c)})
     return [f"U+{ord(c):04X}" for c in bad]
 
 

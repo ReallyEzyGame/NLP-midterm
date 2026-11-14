@@ -1,0 +1,36 @@
+stt	doc_id	ten_file	danh_sach_bia_id	so_mat_co_anh	so_mat_theo_sach	trang_sach	so_trang_doc	model_ocr	trang_model_du_phong	trang_thai	dong_han	chu_han	dong_phien_am	am_tiet_pa	dong_dich_nghia	ti_le_pa_han	byte_chu_han	byte_phien_am	byte_dich_nghia	file_rong	ghi_chu
+2	VBLN-002	02459-31_02460-32_02461-33	02459-31|02460-32|02461-33	3	3	44-52	10	gemini-3.5-flash-lite	-	OK	8	516	20	509	39	0.99	1563	3118	5142	-	-
+4	VBLN-004	02335-21_02336-22	02335-21|02336-22	2	2	61-70	10	gemini-3.5-flash-lite	-	OK	14	634	34	565	42	0.89	1923	3310	6748	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+5	VBLN-005	02343-21_02344-22	02343-21|02344-22	2	2	70-80	11	gemini-3.5-flash-lite	-	OK	25	558	37	560	65	1.00	1699	3328	7296	-	-
+6	VBLN-006	02464-21_02465-22	02464-21|02465-22	2	2	80-89	10	gemini-3.5-flash-lite	-	OK	9	511	36	526	106	1.03	1545	3016	7005	-	-
+7	VBLN-007	02467-21_02468-22	02467-21|02468-22	2	2	89-98	10	gemini-3.5-flash-lite	-	OK	6	556	38	558	89	1.00	1677	3261	6828	-	-
+8	VBLN-008	02340-31_02341-32_02342-33	02340-31|02341-32|02342-33	3	NA	98-109	12	gemini-3.5-flash-lite	-	OK	9	704	63	1036	64	1.47	2121	6105	6626	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+9	VBLN-009	02333-21_02334-22	02333-21|02334-22	2	2	109-114	6	gemini-3.5-flash-lite	-	OK	4	418	22	408	29	0.98	1258	2438	2345	-	-
+10	VBLN-010	02337-31_02338-32_02339-33	02337-31|02338-32|02339-33	3	3	114-121	8	gemini-3.5-flash-lite	-	OK	7	618	30	390	41	0.63	1864	2326	5515	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+11	VBLN-011	02331-21_02332-22	02331-21|02332-22	2	2	121-128	9	gemini-3.5-flash-lite	-	OK	21	554	28	398	59	0.72	1689	2380	6068	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+13	VBLN-013	02462	02462	1	1	137-143	8	gemini-3.5-flash-lite	-	OK	6	194	0	0	62	NA	595	0	6690	Phien_am	RONG Phien_am (sách không có mục Phiên âm)
+15	VBLN-015	02329-21_02330-22	02329-21|02330-22	2	2	149-154	7	gemini-3.5-flash-lite	-	OK	4	451	26	384	46	0.85	1360	2297	4810	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+16	VBLN-016	02437-21_02438-22	02437-21|02438-22	2	2	155-158	5	gemini-3.5-flash-lite	-	OK	8	209	18	235	34	1.12	638	1387	2777	-	-
+20	VBLN-020	02444-21_02479-22	02444-21|02479-22	2	2	193-198	7	gemini-3.5-flash-lite	-	OK	2	522	32	445	36	0.85	1568	2716	3044	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+21	VBLN-021	02442-21_02443-22	02442-21|02443-22	2	2	199-203	5	gemini-3.5-flash-lite	-	OK	5	249	14	206	12	0.83	764	1242	1539	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+22	VBLN-022	02440-21_02441-22	02440-21|02441-22	2	2	203-207	6	gemini-3.5-flash-lite	-	OK	4	277	17	336	35	1.21	839	2069	2827	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+23	VBLN-023	02477-21_02478-22	02477-21|02478-22	2	2	208-212	5	gemini-3.5-flash-lite	-	OK	6	296	18	289	23	0.98	904	1764	2851	-	-
+24	VBLN-024	02480-21_02481-22	02480-21|02481-22	2	2	212-216	6	gemini-3.5-flash-lite	-	OK	5	205	12	197	49	0.96	627	1193	4125	-	-
+25	VBLN-025	02439	02439	1	1	217-219	4	gemini-3.5-flash-lite	-	OK	5	191	15	192	13	1.01	578	1174	1187	-	-
+27	VBLN-027	02434-21_02435-22	02434-21|02435-22	2	1	234-238	5	gemini-3.5-flash-lite	-	OK	4	297	16	298	17	1.00	895	1831	2781	-	không đọc được số ở tiêu đề Hán để đối chiếu STT; sách chỉ chép 1 mặt; Vietnamica có 2 mặt, đã xác nhận (văn bản sách có thể chỉ ứng với một phần các mặt)
+28	VBLN-028	02432-21_02433-22	02432-21|02433-22	2	2	238-244	7	gemini-3.5-flash-lite	-	OK	7	334	24	343	25	1.03	1020	2060	4003	-	-
+43	VBLN-043	02466-21_02469-22	02466-21|02469-22	2	2	275-288	15	gemini-3.5-flash-lite	-	OK	8	943	55	954	52	1.01	2841	5884	7494	-	-
+44	VBLN-044	02473-41_02474-42_02475-43_02476-44	02473-41|02474-42|02475-43|02476-44	4	4	289-299	12	gemini-3.5-flash-lite	tr.290:gemini-3.5-flash	OK	20	677	40	671	59	0.99	2057	3926	7977	-	tr.290 lấy từ gemini-3.5-flash (model chính không đọc nổi)
+45	VBLN-045	02455-21_02456-22	02455-21|02456-22	2	2	300-311	12	gemini-3.5-flash-lite	-	OK	17	936	39	656	68	0.70	2828	3778	8372	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+46	VBLN-046	02471-21_02472-22	02471-21|02472-22	2	2	311-321	12	gemini-3.5-flash-lite	-	OK	17	761	50	662	72	0.87	2304	3868	8686	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+47	VBLN-047	02493-41_02494-42_02495-43_02496-44	02493-41|02494-42|02495-43|02496-44	4	4	322-335	14	gemini-3.5-flash-lite	-	OK	17	984	46	795	77	0.81	2977	4650	8071	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+48	VBLN-048	02453-21_02454-22	02453-21|02454-22	2	2	335-344	11	gemini-3.5-flash-lite	-	OK	7	686	45	696	62	1.01	2069	4073	6475	-	-
+49	VBLN-049	02487-21_02488-22	02487-21|02488-22	2	2	345-352	8	gemini-3.5-flash-lite	-	OK	10	517	28	520	49	1.01	1561	3089	5268	-	-
+50	VBLN-050	02457-21_02458-22	02457-21|02458-22	2	2	352-359	8	gemini-3.5-flash-lite	-	OK	5	352	30	402	43	1.14	1061	2380	4275	-	-
+51	VBLN-051	02482-21_02483-22	02482-21|02483-22	2	2	359-366	9	gemini-3.5-flash-lite	-	OK	3	468	38	503	57	1.07	1411	3024	6474	-	-
+52	VBLN-052	02497-21_02498-22	02497-21|02498-22	2	2	367-373	7	gemini-3.5-flash-lite	-	OK	0	0	26	459	47	NA	0	2725	5991	Chu_Han	RONG Chu_Han (sách không có chữ Hán)
+56	VBLN-056	02436	02436	1	2	384-392	9	gemini-3.5-flash-lite	-	OK	17	397	21	425	27	1.07	1212	2534	4294	-	sách ghi 2 mặt; Vietnamica chỉ có 1 mặt, đã xác nhận (lấy nguyên bài)
+60	VBLN-060	02485-21_02486-22	02485-21|02486-22	2	2	411-419	9	gemini-3.5-flash-lite	-	OK	5	445	26	370	103	0.83	1351	2202	5566	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn)
+62	VBLN-062	02489-41_02490-42_02491-43_02492-44	02489-41|02490-42|02491-43|02492-44	4	4	430-439	10	gemini-3.5-flash-lite	-	OK	6	432	37	491	65	1.14	1302	2945	7464	-	-
+64	VBLN-064	02470-21_02484-22	02470-21|02484-22	2	2	443-451	9	gemini-3.5-flash-lite	-	OK	4	408	25	405	64	0.99	1231	2395	5882	-	không đọc được số ở tiêu đề Hán để đối chiếu STT
+65	VBLN-065	02531-21_02532-22	02531-21|02532-22	2	4	451-458	9	gemini-3.5-flash-lite	-	OK	14	540	18	311	50	0.58	1637	1893	5963	-	TI_LE_LECH (sách rút gọn Hán/Phiên âm, hoặc OCR sót đoạn); sách ghi 4 mặt; Vietnamica chỉ có 2 mặt, đã xác nhận (lấy nguyên bài)

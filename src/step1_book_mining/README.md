@@ -43,6 +43,8 @@ python -m src.step1_book_mining.pipeline_1a --bia 22,25,27          # OCR (nếu
 python -m src.step1_book_mining.pipeline_1a                         # mọi văn bia có ảnh (đọc stt_bia_map.csv)
 python -m src.step1_book_mining.pipeline_1a --khong-ocr --zip       # không gọi API; đóng gói bàn giao
 ```
+**Chữ mất / sách lược → `MASK`** (giảng viên 14/11/2026): Hán `。。。` / `．．．` (dấu lược giữa câu, kể cả khi OCR ghi cách nhau `。 。 。`) và `？` (1 chữ không đọc được); Phiên âm/Dịch nghĩa `...` / `…` / `(?)`. Trước đây `。。。` bị xoá như hoa văn (và bản có khoảng trắng sinh ra các dòng chỉ có `。`).
+
 **Làm sạch chung** (`regex_filter.py`, áp cho mọi bia, không đối chiếu từng chữ): bỏ nhãn/khối thông tin/số trang/chú thích/`○○○`;
 Hán: chỉ giữ chữ Hán + dấu câu sách, dấu nửa khổ → toàn khổ, chữ tương thích → chuẩn (NFC), bỏ khoảng trắng;
 Việt: NFC, bỏ ký tự vô hình/rác và chữ Hán lọt (in xuyên trang), sửa khoảng trắng quanh dấu câu, gộp dấu lặp, `…`→`...`,

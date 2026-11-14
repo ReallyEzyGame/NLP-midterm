@@ -37,7 +37,7 @@ from src.utils import image_processing as imp
 
 log = logging.getLogger("export_ocr")
 REPO_ROOT = Path(__file__).resolve().parents[2]
-IGNORE_LABEL = "###"      # quy ước PaddleOCR cho box không có nhãn (bị bỏ qua khi huấn luyện detection)
+IGNORE_LABEL = ""         # box chưa có nhãn: transcription rỗng theo docx (trước đây "###" → cảnh báo D10 của validator)
 
 
 @dataclass
@@ -210,7 +210,8 @@ def export_group(folder: str, rows: list[dict], cfg: ExportConfig) -> Stats:
                 imp.make_patch(img, box.points, cfg.max_patch_height).save(
                     out / "patches" / patch_name, quality=cfg.jpeg_quality)
                 rec_lines.append(f"{folder}/patches/{patch_name}\t{box.text_gt}")
-                result_rows.append([img_name, patch_name, json.dumps(pts), box.text_gt])
+                # Patch ID KHÔNG kèm đuôi .jpg (docx: "Tên.001.001") — trước đây gây lỗi D8 ×592 của validator
+                result_rows.append([img_name, patch_name.removesuffix(".jpg"), json.dumps(pts), box.text_gt])
                 st.patches += 1
 
             det_lines.append(f"{folder}/images/{img_name}\t{json.dumps(annots, ensure_ascii=False)}")

@@ -25,7 +25,7 @@ import regex
 ROOT = Path(__file__).resolve().parents[2]
 KINDS = ("Chu_Han", "Phien_am", "Dich_nghia")
 HAN_PUNCT = "。，、；：？！「」『』（）《》〈〉…·—"          # chốt tập cuối cùng với Phong
-HAN_RE = regex.compile(rf"(?:\p{{Han}}|[{regex.escape(HAN_PUNCT)}])+")
+HAN_RE = regex.compile(rf"(?:\p{{Han}}|[{regex.escape(HAN_PUNCT)}]|MASK)+")   # MASK = chữ mất/sách lược (GV 14/11/2026)
 JUNK_RE = regex.compile("[□�□■​ ﻿]")
 LABEL_RE = re.compile(r"(?i)\b(phiên\s*âm|dịch\s*nghĩa)\s*:")
 PATH_RE = re.compile(r"(?i)\.(jpe?g|png|tiff?)\b|[\\/]")
@@ -66,7 +66,7 @@ def check_file(path: Path, kind: str) -> list[tuple[int, str, str]]:
             errs.append((i, "V8", "ký tự rác/lỗi mã hoá (□, U+FFFD, NBSP, zero-width…)"))
         if kind == "Chu_Han":
             if not HAN_RE.fullmatch(ln):
-                bad = sorted({c for c in ln if not (regex.match(r"\p{Han}", c) or c in HAN_PUNCT)})
+                bad = sorted({c for c in ln.replace("MASK", "") if not (regex.match(r"\p{Han}", c) or c in HAN_PUNCT)})
                 errs.append((i, "V5", "ký tự ngoài Hán/dấu câu cho phép: " + " ".join(f"U+{ord(c):04X}" for c in bad)))
         else:
             if PAGENO_RE.match(ln.strip()):
