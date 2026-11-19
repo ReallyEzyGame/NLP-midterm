@@ -42,6 +42,10 @@ def build(root: Path) -> None:
     meta, raw, proc = root / "data/metadata", root / "data/raw/anh_bia", root / "data/processed"
     write_csv(meta / "inventory.csv", ["doc_id", "ten_van_ban", "dinh_dang", "file_nguon", "ghi_chu"],
               [[d, n, "pdf_text", "x.pdf", ""] for d, n in DOCS])
+    # tên thư mục dataset_ocr = mã các mặt bia nối "_" (góp ý giảng viên 18/11/2026)
+    write_csv(meta / "van_ban_ma_bia.csv", ["ten_file", "doc_id", "stt", "danh_sach_bia_id"],
+              [["_".join(b for b, dd in BIA if dd == d), d, k, "|".join(b for b, dd in BIA if dd == d)]
+               for k, (d, _) in enumerate(DOCS, 1)])
     write_csv(meta / "bia_manifest.csv",
               ["bia_id", "nguon_url", "file_anh", "rong_px", "cao_px", "doc_id", "is_trial", "ghi_chu"],
               [[b, "", f"{b}.jpg", W, H, d, 1, ""] for b, d in BIA])
@@ -64,7 +68,7 @@ def build(root: Path) -> None:
 
 def check(out_dir: Path) -> None:
     folders = sorted(p for p in out_dir.iterdir() if p.is_dir())
-    assert len(folders) == len(DOCS), folders
+    assert [d.name for d in folders] == [b for b, _ in BIA], folders     # mỗi thư mục đúng 1 mặt bia
     from openpyxl import load_workbook
     for d in folders:
         imgs, patches = sorted((d / "images").glob("*.jpg")), sorted((d / "patches").glob("*.jpg"))
@@ -77,7 +81,12 @@ def check(out_dir: Path) -> None:
         det = (d / "det_gt.txt").read_text(encoding="utf-8").splitlines()
         rows = list(load_workbook(d / "results.xlsx").active.iter_rows(min_row=2, values_only=True))
         assert len(rec) == len(patches) == len(rows), (len(rec), len(patches), len(rows))
-        assert len(det) == len(imgs)
+        # cột OCR văn bia | chữ sách | độ khớp %: box thân OCR đúng → 100; box trán OCR "記碑神佛" ≠ sách → 0.
+        # box trán NGANG: OCR và nhãn ghi theo thứ tự chữ trong ảnh patch (đảo thứ tự đọc phải→trái)
+        assert all(r[5] == (100 if r[3] == r[4] else 0) for r in rows), rows[:3]
+        assert [r[4] for r in rows if r[3] != "蓋聞古語"] == ["語古聞蓋"] * len(imgs), rows[:3]
+        assert [r[3] for r in rows if r[3] != "蓋聞古語"] == ["佛神碑記"] * len(imgs)
+        assert len(det) == len(imgs) == 1 and imgs[0].name == f"{d.name}.001.jpg"
         for line in rec:
             assert (out_dir / line.split("\t")[0]).exists(), line
         for line in det:

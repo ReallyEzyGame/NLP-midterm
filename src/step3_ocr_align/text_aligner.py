@@ -147,7 +147,12 @@ for _grp in _VARIANT_GROUPS:
 # Dị thể bổ sung gặp trên dữ liệu thật 76 mặt (debug 14/11/2026). Nhóm có chữ đã nằm trong bảng trên → NỐI vào nhóm đó
 # (giữ dạng đại diện cũ), không tạo nhóm mới đè lên.
 _EXTRA_VARIANT_GROUPS = ("黨党", "鄉鄕", "戶户戸", "鑒鉴", "敘叙", "並并", "茲兹", "穀糓", "牀床", "爾尒", "決决", "況况",
-                         "淨净", "凉涼", "册冊", "徳德", "冲沖", "沒没", "惠恵", "藏蔵", "恭㳟", "顏顔", "姊姉", "曾曽")
+                         "淨净", "凉涼", "册冊", "徳德", "冲沖", "沒没", "惠恵", "藏蔵", "恭㳟", "顏顔", "姊姉", "曾曽",
+                         # thống kê lệch OCR lab CLC ↔ sách trên box ok (18/11/2026): cùng chữ, khác tự dạng
+                         "髙高", "将將", "盖蓋", "塲場", "监監", "筭算", "縁緣", "灵靈", "辝辭", "僃備", "継繼", "乆久",
+                         "报報", "温溫", "勲勳", "㓜幼", "廼迺", "聀職", "斉齊", "増增", "暎映", "窻窗", "皷鼓", "𭛁發",
+                         "叄叁參", "扵於", "㱕歸", "菓果", "𮞏遞", "叶協", "靣面", "号號", "寕寧", "踈疏", "𤱈畆畝",
+                         "已己巳", "󰜏婆")
 for _grp in _EXTRA_VARIANT_GROUPS:
     _canon = next((HAN_VARIANT_MAP[c] for c in _grp if c in HAN_VARIANT_MAP), _grp[0])
     for _ch in _grp:
@@ -204,7 +209,8 @@ def clean_gt_text(raw_text: str) -> str:
     text = re.sub(r"\(\s*[\?？]\s*\)", "○", text)
     cleaned_chars = []
     for ch in text:
-        if ch in WILDCARD_CHARS or "\u4e00" <= ch <= "\u9fff" or "\u3400" <= ch <= "\u4dbf" or "\u20000" <= ch <= "\u2a6df":
+        if ch in WILDCARD_CHARS or "\u4e00" <= ch <= "\u9fff" or "\u3400" <= ch <= "\u4dbf" or "\U00020000" <= ch <= "\U0003134F":
+            # (tr\u01b0\u1edbc \u0111\u00e2y ghi "\u20000"\u2026"\u2a6df" = chu\u1ed7i 2 k\u00fd t\u1ef1 \u2192 gi\u1eef nh\u1ea7m k\u00fd hi\u1ec7u U+2000\u2013U+2A6D nh\u01b0 \u2026, \u203b)
             cleaned_chars.append(ch)
         elif ch.isalnum() and not ch.isascii():
             cleaned_chars.append(ch)

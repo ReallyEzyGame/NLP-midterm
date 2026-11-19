@@ -232,7 +232,9 @@ class AlignerV3(DynamicProgrammingAligner):
             b, n = boxes[i], len(ocrs[i])
             p = [x for x in pos[k : k + n] if x is not None]
             k += n
-            label = "".join(title_o[x] for x in sorted(p)) if len(p) == n else ""
+            # nhãn theo THỨ TỰ ĐỌC của box (vị trí chữ OCR), không sắp theo sách: sách có khi in tiêu đề trán đúng
+            # như khắc trái→phải (bia 62 "記碑事奉") trong khi trán đọc phải→trái ("奉事碑記")
+            label = "".join(title_o[x] for x in p) if len(p) == n else ""
             exact = label and normalize_han_str(label) == normalize_han_str(ocrs[i])
             conf = float(b.get("score", 0.9))
             if label and (exact or (same_len and sim >= 0.5)):

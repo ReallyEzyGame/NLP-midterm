@@ -15,9 +15,16 @@ Các bước (đo trên 76 mặt — test_debug/result/result.md; mọi ngưỡn
      nào chưa có box nhận, và OCR không giống đoạn sách quanh đó.
   4. Xử lý needs_review: gióng cục bộ kẹp 2 neo; MASK khi OCR tự tin mà không giống chỗ nào trong sách; box 1–2 chữ theo
      ngữ cảnh; còn lại phân loại `ly_do` để người sửa.
+  5. Áp quyết định RÀ SOÁT TAY `data/processed/quyet_dinh_ra_soat.csv` (mỗi box needs_review đã xem ảnh + khe sách +
+     Phiên âm): GAN (gán nhãn) | MASK | SUA_OK_MASK (sửa nhãn ok sai) | KHONG_GAN (giữ needs_review, da_sua=1) | LOAI (xoá
+     box nhiễu khỏi bbox_chuan/align, đánh lại order). Khoá = bia_id + text_ocr (+ order gần nhất) → bền khi order đổi.
 
-    python -m src.step3_ocr_align.pipeline_dataset_ocr
-    python -m src.step3_ocr_align.pipeline_dataset_ocr --nguon paddle_raw_2560 paddle_inv_clahe_tile
+Nguồn OCR mặc định (18/11/2026): `nom_epitaph` = OCR văn bia bằng API lab CLC SinoNom (step2_stele_ocr/ocr_bia.py) —
+nhóm thay PaddleOCR bằng OCR lab theo góp ý giảng viên về chất lượng OCR. Các nguồn PaddleOCR cũ vẫn gộp được bằng --nguon
+(so sánh trong reports/dataset_ocr_<ngày>/metrics.csv).
+
+    python -m src.step3_ocr_align.pipeline_dataset_ocr                       # OCR lab CLC
+    python -m src.step3_ocr_align.pipeline_dataset_ocr --nguon nom_epitaph paddle_raw_2560 paddle_inv_clahe_tile
 """
 from __future__ import annotations
 
@@ -47,7 +54,8 @@ from src.utils import file_io as fio
 ROOT = Path(__file__).resolve().parents[2]
 HAN = re.compile(r"[㐀-鿿\U00020000-\U0002EBEF]")
 # thứ tự ưu tiên khi hoà (giữ đúng kết quả đã kiểm ở test_debug); nguồn khác xếp sau theo tên
-NGUON_UU_TIEN = ["paddle_raw_2560", "rapid_inv_clahe_tile", "paddle_inv_clahe_tile", "paddle_inv_clahe_tile_3200",
+NGUON_MAC_DINH = "nom_epitaph"     # OCR lab CLC
+NGUON_UU_TIEN = ["nom_epitaph", "paddle_raw_2560", "rapid_inv_clahe_tile", "paddle_inv_clahe_tile", "paddle_inv_clahe_tile_3200",
                  "paddle_raw_tile", "paddle_raw_tile_3200"]
 
 # --- MASK cho phần sách không chép (bước 3)
@@ -60,7 +68,9 @@ ANCHOR_MIN = 4       # nhãn ≥ 4 chữ mới làm neo (nhãn ngắn như 生/�
 SIM_LOCAL = 0.6
 SIM_ACCEPT = 0.75    # gióng cục bộ: nhận làm nhãn ĐỀ XUẤT (box ≥ 3 chữ)
 SIM_SURE = 0.8       # tự nhận ok (kiểm tay 21 nhãn: 2 sai đều < 0,8 — danh sách ruộng lặp mẫu 一所X處Y高)
-LEN_RATIO = 0.85     # độ dài lát sách / OCR — chặn nhãn cụt (kiểm tay 30 mẫu ở ngưỡng 0,6: chỉ ~9 đúng)
+LEN_RATIO = 0.85
+LONG_BOX, SIM_LONG = 10, 0.6   # box văn xuôi ≥ 10 chữ kẹp giữa 2 neo: khớp ≥ 0,6 không thể là ngẫu nhiên (kiểm tay 18/11
+                               # sau khi sửa Chu_Han: nhãn đúng, chỉ OCR sai; box ngắn/danh sách lặp mẫu thì vẫn dễ nhầm)     # độ dài lát sách / OCR — chặn nhãn cụt (kiểm tay 30 mẫu ở ngưỡng 0,6: chỉ ~9 đúng)
 SIM_WINDOW = 0.7
 WINDOW = 60
 SIM_NOT_IN_BOOK = 0.4  # < mốc p1 (0,61) của box ok đúng; kiểm tay 30/30 mẫu là chữ bia sách không chép
@@ -156,6 +166,13 @@ def partition(ocrs: list[str], seg: str) -> list[tuple[int, int, float] | None]:
         if b[0] == "take":
             out[b[1]] = (b[2], j, b[3])
         i, j = b[1], b[2]
+    # nối đuôi: chữ OCR cuối sai (敬帥 ↔ sách 敬仰) thì DP không "ăn" chữ sách cuối → nhãn cụt; nối thêm chữ sách CHƯA box nào
+    # nhận cho đủ độ dài OCR
+    starts = sorted(r[0] for r in out if r)
+    for k, r in enumerate(out):
+        if r and r[1] - r[0] < len(ocrs[k]):
+            lim = min([x for x in starts if x >= r[1]] + [m])
+            out[k] = (r[0], min(lim, r[0] + len(ocrs[k])), r[2])
     return out
 
 
@@ -275,12 +292,13 @@ def resolve_review(data: dict, docs: dict, chu_han: Path, widths: dict) -> list[
                 if 0 < hi - lo <= MAX_SEG:
                     # 4a. gióng cục bộ kẹp 2 neo
                     for x, r, o in zip(run, partition(ocrs, g[lo:hi]), ocrs):
-                        if r and not (len(o) <= 2 or (r[2] >= SIM_ACCEPT and
+                        long_ok = r and len(o) >= LONG_BOX and r[2] >= SIM_LONG
+                        if r and not (len(o) <= 2 or ((r[2] >= SIM_ACCEPT or long_ok) and
                                                       min(len(o), r[1] - r[0]) / max(len(o), r[1] - r[0]) >= LEN_RATIO)):
                             r = None
                         if r:
                             s, e, sim = r
-                            sure = len(o) <= 2 or sim >= SIM_SURE
+                            sure = len(o) <= 2 or sim >= SIM_SURE or (len(o) >= LONG_BOX and sim >= SIM_LONG)
                             seq[x][1].update(text_gt=g_orig[lo + s : lo + e].replace(PH, MASK),
                                              status="ok" if sure else "needs_review", score=round(sim, 4),
                                              note=f"RV_GIONG_CUC_BO (sim={sim:.2f}, kẹp giữa 2 neo)")
@@ -355,6 +373,61 @@ def resolve_review(data: dict, docs: dict, chu_han: Path, widths: dict) -> list[
     return rows
 
 
+QD_COLS = ["bia_id", "order", "text_ocr", "quyet_dinh", "text_gt", "ghi_chu", "nguoi_sua"]
+
+
+def apply_review(data: dict, qd_file: Path) -> tuple[list[list], list[str], dict[int, list]]:
+    """Bước 5: áp quyết định rà soát tay (sửa tại chỗ `data`). Trả (dòng log, cảnh báo quyết định không khớp box nào,
+    {id(item): dòng quyết định} để ghi needs_review.csv — tra theo đối tượng vì LOAI đánh lại order)."""
+    by_item: dict[int, list] = {}
+    if not qd_file.exists():
+        return [], [], by_item
+    with open(qd_file, encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    log, warn, refs = [], [], []
+    drop: dict[str, set[int]] = defaultdict(set)
+    for r in rows:
+        bid = r["bia_id"]
+        if bid not in data:
+            warn.append(f"{bid}#{r['order']}: không có mặt bia")
+            continue
+        payload, items = data[bid]
+        cand = [it for it in items if it["text_ocr"] == r["text_ocr"]]
+        if not cand:
+            warn.append(f"{bid}#{r['order']} '{r['text_ocr']}': không còn box có OCR này (OCR/bbox đã đổi?) — bỏ qua")
+            continue
+        it = min(cand, key=lambda x: abs(x["order"] - int(r["order"])))
+        qd, note = r["quyet_dinh"], f"RA_SOAT_TAY {r['quyet_dinh']}: {r['ghi_chu']}"
+        if qd == "GAN":
+            it.update(text_gt=r["text_gt"], status="ok", score=1.0, note=note)
+        elif qd in ("MASK", "SUA_OK_MASK"):
+            it.update(text_gt=MASK, status="ok", score=1.0, note=note)
+        elif qd == "KHONG_GAN":
+            it.update(text_gt="", status="needs_review", note=note)
+        elif qd == "LOAI":
+            drop[bid].add(it["order"])
+        else:
+            warn.append(f"{bid}#{r['order']}: quyết định lạ '{qd}'")
+            continue
+        log.append([bid, it["order"], r["text_ocr"], qd, r["text_gt"], r["ghi_chu"], r.get("nguoi_sua", "")])
+        if qd != "LOAI":
+            by_item[id(it)] = log[-1]
+            refs.append((it, log[-1]))
+    for bid, orders in drop.items():                # LOAI: xoá box nhiễu, đánh lại order liên tục từ 1
+        payload, items = data[bid]
+        keep = [b for b in payload["boxes"] if b["order"] not in orders]
+        new = {b["order"]: k for k, b in enumerate(keep, 1)}
+        for b in keep:
+            b["order"] = new[b["order"]]
+        payload["boxes"] = keep
+        items[:] = [it for it in items if it["order"] not in orders]
+        for it in items:
+            it["order"] = new[it["order"]]
+    for it, row in refs:                            # log ghi order SAU khi đánh lại
+        row[1] = it["order"]
+    return log, warn, by_item
+
+
 def metrics(data: dict, chu_han: Path) -> dict:
     """M1 tỉ lệ ok, M2 phủ văn bản sách bằng box ok, M3 số chữ Hán có nhãn, M5 CER trung vị, số box nhãn chỉ MASK."""
     doc_len, doc_cov = {}, {}
@@ -403,7 +476,8 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", type=Path, default=ROOT)
-    ap.add_argument("--nguon", nargs="*", help="thư mục con của data/interim/paddle_raw (mặc định: tất cả, theo thứ tự ưu tiên)")
+    ap.add_argument("--nguon", nargs="*", help="thư mục con của data/interim/paddle_raw (mặc định: nom_epitaph nếu có; "
+                                               "'tat_ca' = gộp mọi nguồn theo thứ tự ưu tiên)")
     a = ap.parse_args(argv)
     raw = a.root / "data" / "interim" / "paddle_raw"
     img_dir = a.root / "data" / "raw" / "anh_bia"
@@ -411,7 +485,11 @@ def main(argv: list[str] | None = None) -> int:
     proc = a.root / "data" / "processed"
     rep = a.root / "reports" / f"dataset_ocr_{date.today():%Y%m%d}"
     have = sorted(d.name for d in raw.iterdir() if d.is_dir() and any(d.glob("*_res.json"))) if raw.exists() else []
-    order = a.nguon or [s for s in NGUON_UU_TIEN if s in have] + [s for s in have if s not in NGUON_UU_TIEN]
+    order = [s for s in NGUON_UU_TIEN if s in have] + [s for s in have if s not in NGUON_UU_TIEN]
+    if a.nguon and a.nguon != ["tat_ca"]:
+        order = a.nguon
+    elif not a.nguon and NGUON_MAC_DINH in have:
+        order = [NGUON_MAC_DINH]
     if not order:
         print(f"Không có nguồn OCR trong {raw}/<nguồn>/ — chạy step2_stele_ocr/ocr_bia.py trước.")
         return 1
@@ -432,15 +510,30 @@ def main(argv: list[str] | None = None) -> int:
     mlog = mask_unmatched(data, docs, chu_han, widths)
     mrows.append(["+ MASK sach khong chep", *metrics(data, chu_han).values()])
     rv = resolve_review(data, docs, chu_han, widths)
+    mrows.append(["+ xu ly needs_review tu dong", *metrics(data, chu_han).values()])
+    qd_log, qd_warn, qd_item = apply_review(data, proc / "quyet_dinh_ra_soat.csv")
     final = metrics(data, chu_han)
-    mrows.append(["+ xu ly needs_review (cuoi)", *final.values()])
+    mrows.append(["+ ra soat tay (cuoi)", *final.values()])
+    for w in qd_warn:
+        print("  CẢNH BÁO rà soát tay:", w)
 
     for bid, (payload, items) in data.items():
         fio.write_json(proc / "bbox_chuan" / f"{bid}.json", payload)
         fio.write_json(proc / "align" / f"{bid}.json", {"schema_version": 1, "bia_id": bid, "items": items})
-    # needs_review.csv: CHỈ box còn needs_review (validator A9: số dòng = số box needs_review)
-    nr = [[r[0], r[1], r[2], r[3], r[4], r[5] + (f" | {r[6]}" if r[6] else ""), "", r[7]]
-          for r in rv if any(it["order"] == r[1] and it["status"] == "needs_review" for it in data[r[0]][1])]
+    # needs_review.csv: CHỈ box còn needs_review (validator A9: số dòng = số box needs_review); box đã rà soát tay mà
+    # không gán được (KHONG_GAN) ghi da_sua=1 + lý do + người sửa
+    nr = []
+    for bid, (_, items) in data.items():
+        for it in items:
+            if it["status"] != "needs_review":
+                continue
+            q = qd_item.get(id(it))
+            if q:
+                nr.append([bid, it["order"], it["text_ocr"], "", f"{it['score']:.4f}", f"KHONG_GAN_SAU_RA_SOAT | {q[5]}", q[6], 1])
+            else:
+                r = next((x for x in rv if x[0] == bid and x[1] == it["order"]), None)
+                nr.append([bid, it["order"], it["text_ocr"], it["text_gt"], f"{it['score']:.4f}",
+                           (r[5] + (f" | {r[6]}" if r[6] else "")) if r else "CHUA_PHAN_LOAI", "", 0])
     write_csv(proc / "needs_review.csv", ["bia_id", "order", "text_ocr", "text_gt", "score", "ly_do", "nguoi_sua", "da_sua"], nr)
     write_csv(rep / "nguon_ocr_tung_mat.csv", ["bia_id", "nguon", "chu_co_nhan"], src_log)
     write_csv(rep / "mask_khong_chep.csv",
@@ -448,6 +541,8 @@ def main(argv: list[str] | None = None) -> int:
     write_csv(rep / "xu_ly_needs_review.csv",
               ["bia_id", "order", "text_ocr", "text_gt", "score", "quyet_dinh", "goi_y", "da_xu_ly"], rv)
     write_csv(rep / "metrics.csv", ["buoc", *final.keys()], mrows)
+    write_csv(rep / "ra_soat_tay.csv", QD_COLS, qd_log)
+    print(f"Rà soát tay: {len(qd_log)} quyết định áp dụng, {len(qd_warn)} cảnh báo")
     stat = defaultdict(int)
     for r in rv:
         stat[r[5]] += 1

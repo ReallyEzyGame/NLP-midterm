@@ -56,12 +56,13 @@ def _to_4pts(poly: list[list[float]]) -> list[list[int]]:
         xmin, xmax = min(xs), max(xs)
         ymin, ymax = min(ys), max(ys)
         return [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
-    # Đảm bảo thứ tự chuẩn: trên-trái (TL), trên-phải (TR), dưới-phải (BR), dưới-trái (BL)
-    by_sum = sorted(pts, key=lambda p: p[0] + p[1])
-    tl, br = by_sum[0], by_sum[3]
-    rem = sorted([by_sum[1], by_sum[2]], key=lambda p: p[0] - p[1], reverse=True)
-    tr, bl = rem[0], rem[1]
-    return [tl, tr, br, bl]
+    # Thứ tự chuẩn TL, TR, BR, BL = thuận chiều kim đồng hồ (toạ độ ảnh, y hướng xuống): sắp theo góc quanh tâm rồi bắt
+    # đầu từ điểm có x+y nhỏ nhất. (Cách cũ sắp theo x+y bị hoà với box xoay ~45° → ra ngược chiều, lỗi D5 ở 02496-44.)
+    import math
+    cx, cy = sum(p[0] for p in pts) / 4, sum(p[1] for p in pts) / 4
+    ring = sorted(pts, key=lambda p: math.atan2(p[1] - cy, p[0] - cx))
+    k = min(range(4), key=lambda i: (ring[i][0] + ring[i][1], ring[i][0]))
+    return ring[k:] + ring[:k]
 
 
 def is_debris_box(
@@ -125,7 +126,10 @@ def sort_stele_boxes(
         # Trán bia: nằm ở 28% phía trên ảnh và KHÔNG phải cột dọc cao hẹp
         is_top_band = img_height > 0 and m["ymax"] < img_height * 0.30
         aspect = m["w"] / max(1.0, m["h"])
-        if is_top_band and aspect >= 0.72:
+        # dòng tiêu đề ngang dài (OCR lab trả cả dòng trán 1 box) có thể thấp hơn 30% khi thác bản có diềm hoa văn lớn
+        # phía trên (02436: trán 後神碑記 ở 27–31% chiều cao) → vẫn là trán nếu nằm trong 40% trên và rộng ≥ 3× cao
+        is_title_line = img_height > 0 and aspect >= 3.0 and m["ymax"] < img_height * 0.40
+        if (is_top_band and aspect >= 0.72) or is_title_line:
             b["region"] = "tran"
             tran_boxes.append(b)
         else:
@@ -181,12 +185,17 @@ def sort_stele_boxes(
     combined = tran_boxes + ordered_than
     result: list[dict[str, Any]] = []
     for idx, b in enumerate(combined, start=1):
+        text = fio.nfc(b["text_ocr"])
+        # OCR đọc box ngang trái→phải; trán bia đọc phải→trái (CLAUDE.md §5) → đảo về thứ tự đọc
+        # (OCR lab CLC trả cả dòng trán 1 box: '記碑佛後' → '後佛碑記')
+        if b["region"] == "tran" and b["_m"]["w"] >= b["_m"]["h"]:
+            text = text[::-1]
         result.append(
             {
                 "order": idx,
                 "region": b["region"],
                 "points": b["points"],
-                "text_ocr": fio.nfc(b["text_ocr"]),
+                "text_ocr": text,
                 "score": round(float(b["score"]), 4),
                 "source": "auto",
             }
