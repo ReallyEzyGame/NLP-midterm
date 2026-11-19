@@ -22,3 +22,8 @@ aligner:
     char_sim: 0.70          # Tỉ lệ tương đồng ký tự (hỗ trợ wildcard)
     len_ratio: 0.20         # Tỉ lệ nhất quán độ dài box
     ocr_conf: 0.10          # Điểm tin cậy gốc từ mô hình PaddleOCR
+
+# Dóng hàng Hán Nôm ↔ dịch âm (Hướng dẫn dóng hàng - dịch âm.docx, tool SinoNom-alignment của giảng viên)
+dong_hang:
+  dict_dir: "../dict"                     # dict.zip giải nén (QuocNgu_SinoNom_TongHop3.csv, SinoNom_Similar_Dic_v2.csv) — ngoài repo
+  tool_dir: "../SinoNom-alignment"        # github.com/VongHaiYen11/SN-QN-alignment (align_texts.py)

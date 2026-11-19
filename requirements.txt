@@ -5,6 +5,7 @@ numpy==2.5.4
 opencv-python==5.0.0.93
 openpyxl==3.1.5
 pandas==3.1.1
+XlsxWriter==3.3.1          # tool dóng hàng dịch âm SinoNom-alignment (Hướng dẫn dóng hàng - dịch âm)
 PyYAML==6.0.3
 regex==2026.9.29
 RapidFuzz==3.14.6

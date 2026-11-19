@@ -60,27 +60,41 @@ python -m src.step3_ocr_align.export_ocr_dataset     # chạy thật
 python -m src.step3_ocr_align.export_ocr_dataset --only 00270-TF1 --allow-missing-align   # chỉ xuất det_gt khi C chưa xong
 ``````
 
-## Chạy toàn bộ pipeline trên dữ liệu thật (cập nhật 15/11/2026)
+## Chạy toàn bộ pipeline trên dữ liệu thật (cập nhật 18/11/2026)
 
-Mọi lệnh chạy từ `NLP-midterm/` với `.venv` đã bật. Dữ liệu (`data/`) không commit.
+Mọi lệnh chạy từ `NLP-midterm/` với `.venv` đã bật. Dữ liệu (`data/`) không commit. Cần thêm ngoài repo (cùng cấp
+`NLP-midterm/`): `dict/` (dict.zip của giảng viên) và `SinoNom-alignment/` (tool dóng hàng của giảng viên,
+github.com/VongHaiYen11/SN-QN-alignment) — đường dẫn trong `configs/config.yml` mục `dong_hang`.
 
 ```bash
-# Bước 1 — văn bản sạch (không gọi API khi đã có OCR sách); chữ mất/sách lược → token MASK (giảng viên 14/11/2026)
+# Bước 1 — văn bản sạch; chữ mất/sách lược → token MASK (giảng viên 14/11/2026)
+python -m src.step1_book_mining.ocr_gemini --pages 150:han --gian-dong   # OCR lại trang Hán Gemini đọc theo cột dọc
+python -m src.step1_book_mining.chon_ban_ocr_han                          # chọn bản OCR từng trang (khớp âm với Phiên âm)
 python -m src.step1_book_mining.pipeline_1a --khong-ocr
-# Bước 2 — OCR ảnh bia: mỗi nguồn một thư mục data/interim/paddle_raw/<engine>_<variant>/
-python -m src.step2_stele_ocr.ocr_bia --engine paddle --device gpu   # GPU; Colab: src/step2_stele_ocr/colab/README.md
-python -m src.step2_stele_ocr.ocr_bia --engine paddle --ve-anh       # vẽ <bia_id>_ocr_res_img.jpg (JSON đã có thì chỉ vẽ)
-python -m src.step2_stele_ocr.ocr_bia --engine rapid                 # RapidOCR CPU (tuỳ chọn, thêm 1 nguồn)
-# Bước 3 — Dataset 1: gióng v3, gộp nguồn theo mặt, MASK, xử lý needs_review → bbox_chuan/, align/, needs_review.csv
-python src/utils/build_manifest.py                                    # data/metadata/bia_manifest.csv (nếu chưa có)
-python -m src.step3_ocr_align.pipeline_dataset_ocr
-python -m src.step3_ocr_align.export_ocr_dataset
-# Bước 4 — Dataset 2: bộ ba Hán – Phiên âm – Dịch nghĩa
+# Bước 2 — OCR văn bia bằng API lab CLC (đã chạy: data/interim/paddle_raw/nom_epitaph/)
+python -m src.step2_stele_ocr.ocr_bia --input data/raw/anh_bia --ve-anh
+# Bước 3 — Dataset 1: gióng v3 + MASK + xử lý needs_review → bbox_chuan/, align/, needs_review.csv; xuất dataset
+python -m src.step3_ocr_align.pipeline_dataset_ocr                       # mặc định nguồn nom_epitaph (OCR lab CLC)
+python -m src.step3_ocr_align.export_ocr_dataset --version-label v1
+# Bước 4 — Dataset 2 (Hán – Phiên âm – Dịch nghĩa) và dóng hàng chữ Hán ↔ dịch âm (tool giảng viên)
 python -m src.step4_trans_align.build_dataset_dich
-# Kiểm tra
+python -m src.step4_trans_align.dong_hang_dich_am
+# Kiểm tra, báo cáo, đóng gói nộp (../Ket_Qua_Nop/output, ngoài repo)
 python -m src.utils.validate
+python -m src.utils.bao_cao_tong_hop
+python -m src.utils.dong_goi_nop
 ```
 
-Kết quả (76 mặt, 35 văn bia): Dataset 1 — 1.905/2.292 box có nhãn (774 nhãn chữ Hán + 1.131 `MASK`), 11.877 chữ Hán có
-nhãn; Dataset 2 — 813 cặp (580 ok). Box/cặp còn cần người xem có `ly_do` trong `data/processed/needs_review.csv` và
-`reports/dataset_dich_<ngày>/needs_review.csv`. Chi tiết thay đổi và số đo: `test_debug/result/result.md` (ngoài repo).
+Định dạng Dataset 1 theo góp ý giảng viên 18/11/2026: thư mục/ID theo mã bia, không dấu cách, không tiếng Việt;
+mỗi thư mục chứa đúng 1 MẶT bia (`02329-21/images/02329-21.001.jpg`,
+`02329-21/patches/02329-21.001.005.jpg`; `--group-by doc` để gộp theo văn bản); `results.xlsx` = `Image ID | Patch ID | Bounding Box |
+SinoNom OCR (OCR văn bia) | SinoNom Book (chữ sách đã gióng = nhãn rec_gt) | Similarity (%)` + sheet `summary`.
+Box trán nằm ngang nhiều chữ: nhãn ghi theo thứ tự chữ trong ảnh patch (trái→phải).
+
+Kết quả 18/11/2026 (76 mặt, 35 văn bia; số liệu đầy đủ: `reports/BAO_CAO_TONG_HOP_<ngày>.md`):
+- Văn bản sạch: 24 trang Hán Gemini đọc dọc đã OCR lại (3.261/17.249 ký tự Hán thay đổi; Việt gần như không đổi).
+- Dataset 1: 2.376 box, 2.369 patch có nhãn (946 nhãn chữ sách + 1.423 `MASK`), 16.089 chữ Hán có nhãn, phủ 96,3% văn
+  bản sách; độ khớp OCR văn bia ↔ sách 81,3% (theo chữ). 375 box `needs_review` đã rà soát tay (ảnh + khe sách + Phiên âm,
+  `data/processed/quyet_dinh_ra_soat.csv`, pipeline tự áp lại): còn 7 box không gán được (`da_sua=1`, có lý do).
+- Dataset 2: 816 cặp, 740 ok.
+- Dóng hàng dịch âm (tool giảng viên): bộ văn bia 826 box, khớp 88,2%; bộ sách 961 câu, khớp 88,3%; notes.xlsx 288 câu.

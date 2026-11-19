@@ -5,8 +5,10 @@ Vì sao làm lại: bản cũ gióng Hán↔PA và Hán↔DN ĐỘC LẬP rồi 
 chưa cài, nhánh code lỗi) → thực chất là DP theo độ dài. Kiểm tay: cặp đầu tiên đã lệch nghĩa.
 
 Cách làm (kiểm tay 3 mẫu × 50 cặp ngẫu nhiên — test_debug/checklist_debug.md §9.11):
-1. Hán ↔ Phiên âm: PA chuyển tự TỪNG CHỮ (1 chữ ↔ 1 âm tiết). Tự học từ điển chữ→âm từ chính các văn bản (đồng xuất hiện
-   theo vị trí tỉ lệ + 3 vòng hard-EM), rồi Needleman–Wunsch chữ↔âm tiết. Ranh giới câu PA chiếu sang chuỗi Hán.
+1. Hán ↔ Phiên âm: PA chuyển tự TỪNG CHỮ (1 chữ ↔ 1 âm tiết). Từ điển chữ→âm = từ điển của giảng viên
+   (QuocNgu_SinoNom, `tu_dien_han_viet.py`, 18/11/2026) ∪ từ điển tự học từ chính các văn bản (đồng xuất hiện theo vị
+   trí tỉ lệ + 3 vòng hard-EM; bù chữ/âm sách dùng mà từ điển thiếu); âm so theo `am_key` (hoà = hòa, kì = kỳ).
+   Rồi Needleman–Wunsch chữ↔âm tiết. Ranh giới câu PA chiếu sang chuỗi Hán.
 2. Phiên âm ↔ Dịch nghĩa: DP gióng câu (1-1, 1-2, 2-1, 2-2, 1-3, 3-1, bỏ câu); điểm = chồng lấn từ có trọng số IDF, mở rộng
    bằng từ điển dịch PA→DN học bằng IBM Model 1 (vd duy→kính/nghĩ, viết→rằng), trừ phạt lệch độ dài. Tỉ lệ độ dài lấy từ
    các cặp 1–1 khớp chắc (≈ 1,07) — KHÔNG lấy tổng văn bản (bị thổi phồng 2–3,5× vì DN dịch cả danh sách mà Hán lược).
@@ -32,6 +34,7 @@ from datetime import date
 from pathlib import Path
 
 from src.step3_ocr_align.text_aligner import clean_gt_text, normalize_han_str
+from src.step4_trans_align.tu_dien_han_viet import am_key, dict_dir, load_readings
 
 ROOT = Path(__file__).resolve().parents[2]
 PROC = ROOT / "data" / "processed"
@@ -49,11 +52,17 @@ def nfc(s: str) -> str:
     return unicodedata.normalize("NFC", s)
 
 
-def syllables(line: str) -> list[str]:
-    """Âm tiết của câu PA; '(?)' = 1 âm khuyết; chú thích khác trong ngoặc (vd '(tân)') bỏ đi."""
+def syllables(line: str, lower: bool = True) -> list[str]:
+    """Âm tiết của câu PA; '(?)' = 1 âm khuyết; chú thích khác trong ngoặc (vd '(tân)') bỏ đi.
+    lower=False: giữ nguyên chữ hoa (xuất cột DichAm), cùng số phần tử."""
     line = re.sub(r"\(\?\)|MASK", " ？ ", nfc(line))
     line = re.sub(r"\([^)]*\)", " ", line)
-    return [t.lower() for t in re.findall(r"？|[^\W\d_]+", line)]
+    return [t.lower() if lower else t for t in re.findall(r"？|[^\W\d_]+", line)]
+
+
+def keys(line: str) -> list[str]:
+    """Khoá âm (`am_key`) của các âm tiết trong câu PA; '？' (âm khuyết) giữ nguyên."""
+    return [x if x == "？" else am_key(x) for x in syllables(line)]
 
 
 def han_chars(text: str) -> str:
@@ -86,7 +95,7 @@ def learn_lexicon(docs: list[dict]) -> dict[str, set[str]]:
     cnt: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for d in docs:
         h = normalize_han_str(d["han"])
-        s = [x for line in d["pa"] for x in syllables(line)]
+        s = [x for line in d["pa"] for x in keys(line)]
         if not h or not s or not 0.95 <= len(s) / len(h) <= 1.05:
             continue
         r = len(s) / len(h)
@@ -96,6 +105,33 @@ def learn_lexicon(docs: list[dict]) -> dict[str, set[str]]:
                 if 0 <= k < len(s):
                     cnt[ch][s[k]] += 2 if k == j else 1
     return lex_from_counts(cnt)
+
+
+def dict_lexicon() -> dict[str, set[str]]:
+    """Từ điển giảng viên theo chữ ĐÃ chuẩn hoá dị thể (khớp chuỗi Hán chuẩn hoá trong NW); rỗng nếu chưa có dict."""
+    if not (dict_dir() / "QuocNgu_SinoNom_TongHop3.csv").exists():
+        print(f"  CẢNH BÁO: chưa có từ điển giảng viên ở {dict_dir()} — chỉ dùng từ điển tự học", flush=True)
+        return {}
+    lex: dict[str, set[str]] = collections.defaultdict(set)
+    for ch, ks in load_readings().items():
+        lex[normalize_han_str(ch)] |= ks
+    return lex
+
+
+def merge_lex(*lexs: dict[str, set[str]]) -> dict[str, set[str]]:
+    out: dict[str, set[str]] = collections.defaultdict(set)
+    for lx in lexs:
+        for ch, v in lx.items():
+            out[ch] |= set(v)
+    return dict(out)
+
+
+def build_lexicon(docs: list[dict]) -> dict[str, set[str]]:
+    """Từ điển giảng viên ∪ từ điển tự học (EM khởi tạo từ hợp của hai nguồn)."""
+    dl = dict_lexicon()
+    lex = merge_lex(dl, refine_lexicon(docs, merge_lex(dl, learn_lexicon(docs))))
+    print(f"  từ điển chữ→âm: {len(dl)} chữ (giảng viên) → {len(lex)} chữ sau khi gộp từ điển tự học", flush=True)
+    return lex
 
 
 def lex_from_counts(cnt: dict[str, collections.Counter], min_n: int = 3) -> dict[str, set[str]]:
@@ -127,11 +163,12 @@ def align_han_pa(han: str, pa_lines: list[str], lex: dict[str, set[str]], pairs:
     h = normalize_han_str(han)
     sy, owner = [], []
     for li, line in enumerate(pa_lines):
-        for x in syllables(line):
+        for x in keys(line):
             sy.append(x)
             owner.append(li)
     n, m = len(h), len(sy)
     if not n or not m:
+        align_han_pa.line_hit, align_han_pa.bad_run, align_han_pa.h2s = [0] * len(pa_lines), [0] * len(pa_lines), [None] * n
         return [""] * len(pa_lines), 0.0
     M, X, G = 2.0, -0.5, -1.0
     # điểm bằng mảng phẳng; n*m ≤ ~1.1e6 với văn bản dài nhất → chấp nhận được trong Python thuần? dùng list hàng.
@@ -156,6 +193,7 @@ def align_han_pa(han: str, pa_lines: list[str], lex: dict[str, set[str]], pairs:
                 cur[j], ptr[i][j] = l, 2
         prev = cur
     seg = [[] for _ in pa_lines]
+    h2s: list[int | None] = [None] * n          # chữ Hán thứ i ↔ âm tiết thứ j (bước chéo của NW)
     line_hit = [0] * len(pa_lines)
     bad_run = [0] * len(pa_lines)             # chuỗi chữ Hán liền nhau dài nhất KHÔNG khớp âm (nghi Chu_Han sai/tráo)
     run = 0
@@ -165,6 +203,7 @@ def align_han_pa(han: str, pa_lines: list[str], lex: dict[str, set[str]], pairs:
         p = ptr[i][j]
         if p == 0:
             seg[owner[j - 1]].append(han[i - 1])
+            h2s[i - 1] = j - 1
             ok_ = sy[j - 1] in lex.get(h[i - 1], ())
             hit += ok_
             line_hit[owner[j - 1]] += ok_
@@ -184,6 +223,7 @@ def align_han_pa(han: str, pa_lines: list[str], lex: dict[str, set[str]], pairs:
             j -= 1
     align_han_pa.line_hit = line_hit          # độ khớp từng câu PA (đọc ngay sau lần gọi)
     align_han_pa.bad_run = bad_run
+    align_han_pa.h2s = h2s                    # dùng cho dóng hàng box ↔ dịch âm (dong_hang_dich_am.py)
     return ["".join(reversed(s)) for s in seg], hit / max(n, m)
 
 
@@ -288,10 +328,62 @@ def align_pa_dn(pa: list[str], dn: list[str], idf: dict[str, float], ratio: floa
     return out
 
 
+# ------------------------------------------------------------------ 3. Rà soát tay
+def load_review(f: Path) -> dict[str, list[dict]]:
+    """Quyết định rà soát tay cặp needs_review: OK (giữ, chuyển ok) | SUA (thay han/phien_am/dich_nghia — ô rỗng = giữ)
+    | LOAI (bỏ cặp: không có đối ứng Hán hoặc đã gộp vào cặp khác). Khoá = bia_id + đầu câu Phiên âm GỐC (`pa_dau`)."""
+    out: dict[str, list[dict]] = collections.defaultdict(list)
+    if f.exists():
+        with open(f, encoding="utf-8", newline="") as fh:
+            for r in csv.DictReader(fh):
+                out[r["bia_id"]].append({k: nfc(v) for k, v in r.items()})
+    return out
+
+
+def apply_review(d: dict, recs: list[dict], whys: list[str], rows: list[dict]) -> tuple[list[list], list[str]]:
+    """Áp quyết định lên `recs` (sửa tại chỗ, cùng `whys`). Kiểm: khoá khớp đúng 1 cặp; từ PA/DN mới phải có trong văn
+    bản sách của chính văn bia (bắt lỗi gõ); chữ Hán mới không có trong Chu_Han được ghi vào log để đối chiếu."""
+    log, warn = [], []
+    vocab = {t for line in d["pa"] + d["dn"] for t in toks(line)}
+    book_han = set(d["han"])
+    target = []
+    for r in rows:                                          # khớp theo Phiên âm GỐC trước khi sửa
+        hit = [k for k, x in enumerate(recs) if x["phien_am"].startswith(r["pa_dau"])]
+        if len(hit) > 1:
+            hit = [k for k in hit if recs[k]["phien_am"] == r["pa_dau"]] or hit
+        if len(hit) != 1:
+            warn.append(f"{d['id']} '{r['pa_dau']}': khớp {len(hit)} cặp — bỏ qua")
+            continue
+        target.append((hit[0], r))
+    drop = set()
+    for k, r in target:
+        rec, note = recs[k], []
+        if r["quyet_dinh"] == "LOAI":
+            drop.add(k)
+        elif r["quyet_dinh"] in ("OK", "SUA"):
+            for fld in ("han", "phien_am", "dich_nghia"):
+                if r[fld]:
+                    rec[fld] = r[fld]
+            lost = sorted({t for fld in ("phien_am", "dich_nghia") for t in toks(r[fld])} - vocab)
+            if lost:
+                warn.append(f"{d['id']} '{r['pa_dau']}': từ không có trong sách {lost}")
+            new_han = sorted(set(r["han"].replace("MASK", "")) - book_han)
+            if new_han:
+                note.append("chữ Hán sửa theo ảnh sách: " + "".join(new_han))
+            rec["status"] = "ok"
+        else:
+            warn.append(f"{d['id']} '{r['pa_dau']}': quyết định lạ {r['quyet_dinh']}")
+            continue
+        log.append([d["id"], rec["pair_id"], r["quyet_dinh"], r["ghi_chu"], r["nguoi_sua"], "; ".join(note)])
+    for k in sorted(drop, reverse=True):
+        del recs[k], whys[k]
+    return log, warn
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     docs = load_docs()
-    lex = refine_lexicon(docs, learn_lexicon(docs))
+    lex = build_lexicon(docs)
     df = collections.Counter(t for d in docs for line in d["dn"] + d["pa"] for t in set(toks(line)))
     nlines = sum(len(d["dn"]) + len(d["pa"]) for d in docs)
     idf = {t: math.log(nlines / c) for t, c in df.items()}
@@ -322,7 +414,8 @@ def main() -> None:
     print(f"từ điển dịch PA→DN: {len(tdict)} mục từ {len(train)} cặp; vd " +
           ", ".join(f"{k}→{'/'.join(y for y, _ in tdict[k][:2])}" for k in ("quyến", "duy", "viết", "ngã", "vân", "tất")
                     if k in tdict))
-    rep, calib, review = [], [], []
+    rep, calib, review, qd_log, qd_warn = [], [], [], [], []
+    qd = load_review(PROC / "quyet_dinh_ra_soat_dich.csv")
     for d in docs:
         row = {"bia_id": d["id"], "han_chars": len(d["han"]), "pa_lines": len(d["pa"]), "dn_lines": len(d["dn"]),
                "han_pa_match": "", "pairs": 0, "ok": 0, "dn_unpaired": 0, "ghi_chu": ""}
@@ -334,7 +427,7 @@ def main() -> None:
         line_hit, bad_run = align_han_pa.line_hit, align_han_pa.bad_run
         row["han_pa_match"] = round(hp, 3)
         r_doc = ratio_of.get(d["id"], glob_r)
-        recs = []
+        recs, whys = [], []
         for pi, di, sc in align_pa_dn(d["pa"], d["dn"], idf, ratio=r_doc, tdict=tdict):
             if not pi or not di:
                 row["dn_unpaired"] += len(di)
@@ -357,13 +450,19 @@ def main() -> None:
             if "MASK" in pa_txt and "MASK" not in dn_txt and lr > 1.3:
                 why.append("DICH_NGHIA_DAY_DU_HON_HAN (sách lược Hán, bản dịch đủ)")
             status = "needs_review" if why else "ok"
-            if why:
-                review.append([d["id"], len(recs) + 1, " ; ".join(why), pa_txt[:80], dn_txt[:80]])
             recs.append({"schema_version": 1, "bia_id": d["id"], "pair_id": len(recs) + 1,
                          "han": han.replace("？", "MASK"),
                          "phien_am": " ".join(d["pa"][i] for i in pi), "dich_nghia": " ".join(d["dn"][i] for i in di),
                          "score": round(max(0.0, sc), 4), "status": status})
+            whys.append(" ; ".join(why))
             calib.append({"bia_id": d["id"], "pair_id": len(recs), "han_hit": round(han_hit, 3)})
+        log, warn = apply_review(d, recs, whys, qd.get(d["id"], []))
+        qd_log += log
+        qd_warn += warn
+        for k, r in enumerate(recs, 1):            # pair_id liên tục sau khi gộp/loại
+            r["pair_id"] = k
+            if r["status"] != "ok":
+                review.append([d["id"], k, whys[k - 1], r["phien_am"][:80], r["dich_nghia"][:80]])
         with open(OUT / f"{d['id']}.jsonl", "w", encoding="utf-8", newline="\n") as f:
             for r in recs:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -377,6 +476,13 @@ def main() -> None:
         w = csv.writer(f, lineterminator="\n")
         w.writerow(["bia_id", "pair_id", "ly_do", "phien_am_dau", "dich_nghia_dau"])
         w.writerows(review)
+    with open(REP / "ra_soat_tay.csv", "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["bia_id", "pair_id_cu", "quyet_dinh", "ghi_chu", "nguoi_sua", "canh_bao"])
+        w.writerows(qd_log)
+    for x in qd_warn:
+        print("  CẢNH BÁO rà soát tay:", x)
+    print(f"rà soát tay: {len(qd_log)} quyết định áp dụng, {len(qd_warn)} cảnh báo")
     with open(REP / "han_hit.csv", "w", encoding="utf-8", newline="") as f:   # để hiệu chuẩn lại
         w = csv.DictWriter(f, fieldnames=["bia_id", "pair_id", "han_hit"], lineterminator="\n")
         w.writeheader()

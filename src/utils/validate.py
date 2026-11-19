@@ -51,7 +51,9 @@ IOU_MAX = 0.5              # Data Contract §6: không cặp box nào IoU > 0.5
 MIN_OK_RATE = 0.30         # cảnh báo khi tỉ lệ box ok của một bia thấp hơn (ngưỡng tạm, nhóm tự chỉnh)
 TALL_PATCH_RATIO = 1.2     # patch cao hơn rộng quá mức này ⇒ nghi chưa xoay
 
-RESULTS_HEADER = ["Image ID", "Patch ID", "Bounding Box", "SinoNom OCR"]
+# góp ý giảng viên 18/11/2026: cột OCR văn bia + cột chữ sách đã gióng (= nhãn rec_gt) + độ tương đồng
+RESULTS_HEADER = ["Image ID", "Patch ID", "Bounding Box", "SinoNom OCR", "SinoNom Book", "Similarity (%)"]
+ID_RE = re.compile(r"[0-9A-Za-z_-]+")      # tên thư mục/ID theo mã bia: không dấu cách, không tiếng Việt
 REGIONS = {"tran", "than"}
 ALIGN_STATUS = {"ok", "needs_review", "unmatched"}
 BBOX_SOURCES = {"auto", "manual"}
@@ -170,12 +172,13 @@ def iou(a, b) -> float:
     return inter / ua if ua > 0 else 0.0
 
 
-def folder_name(name: str) -> str:
-    """Giống sanitize_folder_name của export_ocr_dataset (để đối soát tên thư mục)."""
-    name = unicodedata.normalize("NFC", name)
-    for ch in '\\/:*?"<>|':
-        name = name.replace(ch, " ")
-    return " ".join(name.split()).strip(" .")
+def doc_folder_names(root: Path) -> dict[str, str]:
+    """doc_id → tên thư mục dataset_ocr (= tên file văn bản sạch, mã các mặt bia nối "_"), như export_ocr_dataset."""
+    p = root / "data" / "metadata" / "van_ban_ma_bia.csv"
+    if not p.is_file():
+        return {}
+    with open(p, encoding="utf-8", newline="") as f:
+        return {r["doc_id"]: r["ten_file"] for r in csv.DictReader(f)}
 
 
 def image_size(path: Path) -> tuple[int, int] | None:
@@ -450,6 +453,9 @@ def _check_dataset_ocr_dir(out_dir: Path, rep: Report, root: Path | None,
         rep.err("D0", _rel(out_dir, root), "dataset_ocr rỗng (chưa có thư mục văn bản nào)")
     for d in folders:
         fname = d.name
+        if not ID_RE.fullmatch(fname):
+            rep.err("D2", _rel(d, root), "tên thư mục/ID phải theo mã bia: chỉ chữ số, chữ Latinh không dấu, '-', '_' "
+                                         "(góp ý giảng viên 18/11/2026: không dấu cách, không tiếng Việt)")
         w0 = _rel(d, root)
         for need in ("images", "patches"):
             if not (d / need).is_dir():
@@ -581,14 +587,15 @@ def _check_dataset_ocr_dir(out_dir: Path, rep: Report, root: Path | None,
                 rep.err("D8", _rel(xl, root), f"không đọc được xlsx: {type(e).__name__}")
                 allrows = []
             if allrows:
-                head = [str(c) if c is not None else "" for c in allrows[0][:4]]
+                head = [str(c) if c is not None else "" for c in allrows[0][:len(RESULTS_HEADER)]]
                 if head != RESULTS_HEADER:
                     rep.err("D8", _rel(xl, root), f"header phải là {RESULTS_HEADER}")
                 last_by_img: dict[str, int] = {}
                 for i, row in enumerate(allrows[1:], 2):
                     n_rows += 1
                     loc = f"{_rel(xl, root)}:{i}"
-                    img_id, patch_id, bb, label = [("" if c is None else str(c)) for c in (list(row) + [None] * 4)[:4]]
+                    img_id, patch_id, bb, _ocr, label, _sim = [("" if c is None else str(c))
+                                                               for c in (list(row) + [None] * 6)[:6]]
                     if img_id not in images:
                         rep.err("D8", loc, "Image ID không khớp file ảnh nào (cần kèm .jpg)")
                     if patch_id.lower().endswith(".jpg"):
@@ -610,7 +617,7 @@ def _check_dataset_ocr_dir(out_dir: Path, rep: Report, root: Path | None,
                     elif img_id in det_boxes and tuple(map(tuple, pts)) not in det_boxes[img_id]:
                         rep.err("D8", loc, "Bounding Box không có trong det_gt.txt của ảnh này")
                     if patch_file in rec_text and unicodedata.normalize("NFC", label) != rec_text[patch_file]:
-                        rep.err("D8", loc, "SinoNom OCR khác nhãn trong rec_gt.txt")
+                        rep.err("D8", loc, "SinoNom Book khác nhãn trong rec_gt.txt")
                     if m_p:
                         seq = int(m_p.group(2))
                         if seq <= last_by_img.get(img_id, 0):
@@ -743,14 +750,15 @@ def run(root: Path, stages: list[str], only: set[str] | None = None, min_ok_rate
         align_stats = validate_align(root, rep, only, bbox_info, min_ok_rate)
     if "dataset_ocr" in stages:
         expected = None
+        names = doc_folder_names(root)
         if manifest and inventory:
             align_stats = align_stats or _quiet(validate_align, root, only, _quiet(validate_bbox, root, only, manifest), min_ok_rate)
             expected = defaultdict(lambda: {"ok": 0, "faces": 0})
             for bid, st in align_stats.items():
                 row = manifest.get(bid)
-                inv = inventory.get(row["doc_id"]) if row else None
-                if inv:
-                    e = expected[folder_name(inv["ten_van_ban"])]
+                # thư mục dataset_ocr có thể theo MẶT bia (bia_id, mặc định) hoặc theo văn bản (mã các mặt nối "_")
+                for key in {bid, names.get(row["doc_id"])} - {None} if row else ():
+                    e = expected[key]
                     e["ok"] += st["ok"]
                     e["faces"] += 1
             expected = dict(expected)
@@ -803,7 +811,7 @@ def print_report(rep: Report, stages: list[str], root: Path | None, strict: bool
 # =====================================================================  selftest
 def _build_fixture(root: Path) -> None:
     """Dựng một bộ dữ liệu HỢP LỆ nhỏ (1 văn bản, 1 mặt bia, 2 box) để làm nền cho selftest."""
-    fn = "Van ban thu"
+    fn = "B1"
     W, H = 800, 1600
     meta, raw = root / "data/metadata", root / "data/raw/anh_bia"
     proc, out = root / "data/processed", root / "data/output"
@@ -815,7 +823,8 @@ def _build_fixture(root: Path) -> None:
         with open(path, "w", encoding="utf-8", newline="") as f:
             w = csv.writer(f, lineterminator="\n"); w.writerow(header); w.writerows(rows)
 
-    wcsv(meta / "inventory.csv", ["doc_id", "ten_van_ban", "dinh_dang", "file_nguon", "ghi_chu"], [["D1", fn, "anh", "x", ""]])
+    wcsv(meta / "inventory.csv", ["doc_id", "ten_van_ban", "dinh_dang", "file_nguon", "ghi_chu"], [["D1", "Văn bản thử", "anh", "x", ""]])
+    wcsv(meta / "van_ban_ma_bia.csv", ["ten_file", "doc_id", "stt", "danh_sach_bia_id"], [[fn, "D1", 1, "B1"]])
     wcsv(meta / "bia_manifest.csv", ["bia_id", "nguon_url", "file_anh", "rong_px", "cao_px", "doc_id", "is_trial", "ghi_chu"],
          [["B1", "", "B1.jpg", W, H, "D1", 0, ""]])
     Image.new("RGB", (W, H), (230, 230, 230)).save(raw / "B1.jpg")
@@ -838,8 +847,8 @@ def _build_fixture(root: Path) -> None:
     rec = f"{fn}/patches/{fn}.001.001.jpg\t後\n{fn}/patches/{fn}.001.002.jpg\t佛\n"
     (out / f"dataset_ocr/{fn}/rec_gt.txt").write_text(rec, encoding="utf-8", newline="\n")
     wb = Workbook(); ws = wb.active; ws.append(RESULTS_HEADER)
-    ws.append([f"{fn}.001.jpg", f"{fn}.001.001", json.dumps(p1), "後"])
-    ws.append([f"{fn}.001.jpg", f"{fn}.001.002", json.dumps(p2), "佛"])
+    ws.append([f"{fn}.001.jpg", f"{fn}.001.001", json.dumps(p1), "後", "後", 100.0])
+    ws.append([f"{fn}.001.jpg", f"{fn}.001.002", json.dumps(p2), "仏", "佛", 0.0])
     wb.save(out / f"dataset_ocr/{fn}/results.xlsx")
     pair = {"bia_id": "B1", "sentence_id": 1, "han": "後佛", "phien_am": "Hậu Phật", "dich_nghia": "Phật đời sau.", "score": 0.9}
     (out / "dataset_dich/B1.jsonl").write_text(json.dumps(pair, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
@@ -850,7 +859,7 @@ def _build_fixture(root: Path) -> None:
 
 def selftest() -> int:
     import shutil
-    FN = "Van ban thu"
+    FN = "B1"
 
     def edit_json(rel, fn):
         def go(root):
