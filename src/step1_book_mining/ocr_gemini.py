@@ -15,6 +15,12 @@ Cách chạy (từ thư mục NLP-midterm, đã bật .venv):
     python -m src.step1_book_mining.ocr_gemini --bia 25,27,22          # trang lấy từ muc_luc_sach.csv
     python -m src.step1_book_mining.ocr_gemini --pages 100:han --force        # chạy lại, ghi đè trang đã có
     python -m src.step1_book_mining.ocr_gemini --bia 25 --dry-run      # chỉ in kế hoạch, KHÔNG gọi API
+    python -m src.step1_book_mining.ocr_gemini --pages 150:han --gian-dong   # OCR lại trang Hán bị đọc theo cột dọc
+
+``--gian-dong`` (18/11/2026): chữ Hán trong sách in thành LƯỚI đều nên Gemini hay đọc nhầm theo CỘT DỌC (vd tr.150:
+"具萬之即…" thay vì "座郎聞法…") — kết quả lệch hẳn ảnh mà vẫn STOP, không bị bắt là "lặp". Cách sửa: tách dòng chữ bằng
+chiếu ngang, ghép lại với khoảng trắng 1,2× chiều cao dòng (hết dạng lưới) + prompt "đọc theo HÀNG NGANG". Kết quả ghi
+vào ``<model>-gian-dong/``; chọn bản tốt hơn cho từng trang bằng ``chon_ban_ocr_han.py`` (độ khớp âm với Phiên âm).
 
 ``kind`` của prompt: ``han`` (chữ Hán phồn thể), ``viet`` (tiếng Việt có dấu) hoặc ``mixed`` (trang có cả hai;
 prompt ``mixed`` CHƯA được đo CER — xem README). Với ``--bia`` kind được suy từ ``muc_luc_sach.csv``.
@@ -151,6 +157,74 @@ def load_client():
     return genai.Client(api_key=Path(kf).read_text(encoding="utf-8").strip())
 
 
+PROMPT_GIAN_DONG = (
+    "Ảnh là một trang sách in, chữ xếp theo HÀNG NGANG (các hàng đã được giãn cách). Chép lại NGUYÊN VĂN từng hàng, "
+    "mỗi hàng ảnh là một dòng kết quả, đọc mỗi hàng từ TRÁI sang PHẢI, các hàng từ trên xuống dưới. "
+    "KHÔNG đọc theo cột dọc. Chữ Hán: giữ nguyên PHỒN THỂ và dị thể như in, KHÔNG đổi giản thể, KHÔNG sửa, "
+    "KHÔNG thêm bớt. Tiếng Việt: giữ chính xác mọi dấu. Giữ dấu câu như in. Bỏ qua số trang. Chỉ trả về văn bản.")
+
+
+def page_image(page: int) -> Image.Image:
+    f, side = page_map()[page]
+    im = Image.open(f).convert("RGB")
+    w, h = im.size
+    return im.crop((0, 0, w // 2, h)) if side == "L" else im.crop((w // 2, 0, w, h)) if side == "R" else im
+
+
+def text_bands(im: Image.Image) -> list[tuple[int, int]]:
+    """Dải dòng chữ (y0, y1): hàng có số điểm mực đậm > 12% mức dòng chữ điển hình. Bỏ 8% mép trái/phải (gáy sách
+    tối chạy dọc trang làm hàng nào cũng có mực) và trừ nền (chữ in xuyên mặt sau nhạt hơn chữ in)."""
+    import numpy as np
+    g = np.asarray(im.convert("L"), dtype=np.int32)
+    w = g.shape[1]
+    g = g[:, int(0.08 * w): int(0.92 * w)]
+    prof = np.convolve((g < 100).sum(axis=1), np.ones(3) / 3, mode="same")
+    prof = np.maximum(0, prof - np.percentile(prof, 10))
+    peak = np.percentile(prof[prof > 0], 90) if (prof > 0).any() else 0
+    on = prof > max(2, 0.12 * peak)
+    bands, y = [], 0
+    while y < len(on):
+        if on[y]:
+            s0 = y
+            while y < len(on) and on[y]:
+                y += 1
+            bands.append((s0, y))
+        y += 1
+    if not bands:
+        return []
+    hmed = sorted(b - a for a, b in bands)[len(bands) // 2]
+    merged: list[tuple[int, int]] = []
+    for a, b in bands:                      # dấu thanh tiếng Việt / nét rời: gộp khe < 25% chiều cao dòng
+        if merged and a - merged[-1][1] < max(4, 0.25 * hmed):
+            merged[-1] = (merged[-1][0], b)
+        else:
+            merged.append((a, b))
+    return [(a, b) for a, b in merged if b - a >= max(8, 0.35 * hmed)]
+
+
+def spaced_page(page: int) -> tuple[bytes, int]:
+    """Ảnh trang đã giãn dòng (PNG) + số khe đã chèn. Cắt tại ĐIỂM GIỮA khe giữa hai dải dòng và ghép TOÀN BỘ các lát
+    (không bỏ hàng ảnh nào): dòng in nhạt mà `text_bands` bỏ sót (đầu tr.150, 213) vẫn nằm trong lát bên cạnh, chỉ ít
+    giãn hơn — không bao giờ mất chữ (bản đầu chỉ dán các dải dò được nên làm mất dòng)."""
+    out, n = spaced_image(page_image(page))
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue(), n
+
+
+def spaced_image(im: Image.Image) -> tuple[Image.Image, int]:
+    bands = text_bands(im)
+    hmed = sorted(b - a for a, b in bands)[len(bands) // 2] if bands else 40
+    gap = int(1.2 * hmed)
+    cuts = [0] + [(b0 + a1) // 2 for (_, b0), (a1, _) in zip(bands, bands[1:])] + [im.height]
+    out = Image.new("RGB", (im.width, im.height + gap * (len(cuts) - 2)), "white")
+    y = 0
+    for a, b in zip(cuts, cuts[1:]):
+        out.paste(im.crop((0, a, im.width, b)), (0, y))
+        y += b - a + gap
+    return out, len(bands)
+
+
 HAN_WIN, HAN_REPEATS = 12, 4              # đoạn 12 chữ Hán lặp ≥ 4 lần trên một trang = thoái hoá
 REPEAT_RE = re.compile(r"(\S{1,8}?)\1{7,}")      # một đơn vị 1–8 ký tự lặp liên tiếp ≥ 8 lần
 
@@ -207,6 +281,8 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="ghi đè trang đã có")
     ap.add_argument("--dry-run", action="store_true", help="chỉ in kế hoạch, không gọi API")
     ap.add_argument("--khong-chia-doi", action="store_true", help="không dùng phương án cắt đôi trang khi OCR bị lặp")
+    ap.add_argument("--gian-dong", action="store_true",
+                    help="tách & giãn dòng + prompt hàng ngang (trang Hán bị đọc theo cột dọc) → <model>-gian-dong/")
     a = ap.parse_args()
 
     plan = parse_pages(a.pages) if a.pages else pages_from_bia([int(x) for x in a.bia.split(",")])
@@ -214,12 +290,12 @@ def main() -> int:
     missing = [p for p, _ in plan if p not in pm]
     if missing:
         sys.exit(f"Không có ảnh cho trang: {missing}")
-    out = OUT_ROOT / a.model
+    out = OUT_ROOT / (a.model + ("-gian-dong" if a.gian_dong else ""))
     def can_chay(p: int) -> bool:          # chưa có, hoặc đã lưu nhưng bị lặp (kết quả cũ)
         f = out / f"p{p:03d}.txt"
         if f.exists():
             return degenerate(f.read_text(encoding="utf-8"))
-        if a.model == DEFAULT_MODEL:       # đã có bản tốt từ model dự phòng thì không gọi lại model chính (tốn lượt, vẫn hỏng)
+        if a.model == DEFAULT_MODEL and not a.gian_dong:       # đã có bản tốt từ model dự phòng thì không gọi lại model chính (tốn lượt, vẫn hỏng)
             for m in FALLBACK_MODELS:
                 g = OUT_ROOT / m / f"p{p:03d}.txt"
                 if g.exists() and not degenerate(g.read_text(encoding="utf-8")):
@@ -245,6 +321,9 @@ def main() -> int:
         last = time.time()
         prompt = PROMPTS[k]
         png = crop_page(p)
+        if a.gian_dong:
+            png, nd = spaced_page(p)
+            prompt = PROMPT_GIAN_DONG
         for temp in TEMPS:
             r = call_with_backoff(client, a.model, png, prompt, temperature=temp)
             try:
@@ -265,7 +344,9 @@ def main() -> int:
             "chars": len(txt),
             "finish_reason": fr,
         }
-        if (not txt.strip() or fr != "STOP" or degenerate(txt)) and not a.khong_chia_doi:
+        if a.gian_dong:
+            meta["gian_dong"], meta["so_dong"] = True, nd
+        if (not txt.strip() or fr != "STOP" or degenerate(txt)) and not a.khong_chia_doi and not a.gian_dong:
             # dự phòng: mọi nhiệt độ đều lặp/hỏng ⇒ cắt trang làm hai nửa, OCR từng nửa (ít nội dung hơn ⇒ ít lặp hơn)
             print(f"   tr.{p:03d}: thử cắt đôi trang (mỗi nửa một lần gọi)", file=sys.stderr)
             parts: list[str] = []

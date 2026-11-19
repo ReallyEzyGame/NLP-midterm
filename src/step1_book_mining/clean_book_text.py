@@ -36,6 +36,15 @@ TEXT_THO = ROOT / "data/interim/text_tho"
 NHAP = ROOT / "data/interim/van_ban_nhap"
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 FALLBACK_MODELS = ("gemini-3.5-flash",)       # trùng ocr_gemini.FALLBACK_MODELS
+CHON_BAN = OCR_ROOT / "chon_ban.csv"           # chon_ban_ocr_han.py: trang Hán dùng bản OCR giãn dòng (Gemini đọc dọc)
+
+
+def chon_ban() -> dict[int, str]:
+    """trang → thư mục OCR được chọn (chỉ các trang chon_ban_ocr_han.py đã xét)."""
+    if not CHON_BAN.exists():
+        return {}
+    with open(CHON_BAN, encoding="utf-8", newline="") as f:
+        return {int(r["trang"]): r["nguon"] for r in csv.DictReader(f) if r["nguon"]}
 
 
 def bia_id_of(stt: int) -> str:
@@ -90,8 +99,13 @@ def process(stt: int, row: dict, model: str, end: tuple[int, bool] | None = None
 
     # ---- 1. text_tho: ghép OCR thô theo trang
     raw: dict[int, str] = {}
+    chon = chon_ban() if model == DEFAULT_MODEL else {}
     for p in pages:
         f = OCR_ROOT / model / f"p{p:03d}.txt"
+        if p in chon and (OCR_ROOT / chon[p] / f"p{p:03d}.txt").exists():
+            f = OCR_ROOT / chon[p] / f"p{p:03d}.txt"
+            if chon[p] != model:
+                log.append(f"[GHI CHÚ] tr.{p} lấy từ {chon[p]} (chon_ban.csv)")
         if not f.exists():                           # model chính không đọc nổi trang này ⇒ dùng bản của model dự phòng
             f = next((g for m in FALLBACK_MODELS if (g := OCR_ROOT / m / f"p{p:03d}.txt").exists()), f)
             if f.exists():
