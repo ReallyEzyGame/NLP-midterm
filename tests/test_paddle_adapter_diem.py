@@ -11,3 +11,20 @@ def test_box_thoi_va_box_thuong():
     assert _cw(thoi) and thoi[0] == [1722, 6127]
     for pts in ([[10, 10], [100, 12], [98, 300], [8, 298]], [[98, 300], [8, 298], [10, 10], [100, 12]]):
         assert _to_4pts(pts) == [[10, 10], [100, 12], [98, 300], [8, 298]]
+
+
+def test_so_chu_lech_so_box_bao_loi_score_cu_bo_qua(tmp_path):
+    import json
+    from src.step3_ocr_align.paddle_adapter import convert_paddle_raw_to_bbox_chuan
+    box = [[[100 + 200 * i, 100], [250 + 200 * i, 100], [250 + 200 * i, 2000], [100 + 200 * i, 2000]] for i in range(3)]
+    f = tmp_path / "x_res.json"
+    f.write_text(json.dumps({"dt_polys": box, "rec_texts": ["天地人和", "山水風月", "日月星辰"], "rec_scores": [0.9]}),
+                 encoding="utf-8")
+    payload, _ = convert_paddle_raw_to_bbox_chuan(f, "x")
+    assert len(payload["boxes"]) == 3                  # score cũ thiếu → không mất box
+    f.write_text(json.dumps({"dt_polys": box, "rec_texts": ["天地人和", "山水風月"]}), encoding="utf-8")
+    try:
+        convert_paddle_raw_to_bbox_chuan(f, "x")
+        raise AssertionError("phải báo lỗi khi số chữ ≠ số box")
+    except ValueError:
+        pass

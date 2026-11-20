@@ -225,7 +225,11 @@ def convert_paddle_raw_to_bbox_chuan(
 
     polys = raw.get("dt_polys") or raw.get("rec_polys") or []
     texts = raw.get("rec_texts") or []
-    scores = raw.get("rec_scores") or [0.90] * len(texts)
+    if len(texts) != len(polys):            # zip sẽ cắt im lặng → chữ lệch box
+        raise ValueError(f"{raw_json_path}: {len(polys)} dt_polys nhưng {len(texts)} rec_texts")
+    scores = raw.get("rec_scores") or []
+    if len(scores) != len(polys):           # nhóm sửa box tay nhưng không cập nhật rec_scores
+        scores = [0.90] * len(polys)
 
     kept: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
