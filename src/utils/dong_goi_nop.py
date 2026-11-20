@@ -8,7 +8,7 @@ output/
   dataset_ocr/<tên>/{images,patches,det_gt.txt,rec_gt.txt,results.xlsx}   2+4. Dataset 1 (+ ảnh crop từng văn bản)
   dataset_dich/<tên>.jsonl                                  3. Dataset 2 (Hán – Phiên âm – Dịch nghĩa)
   dong_hang_dich_am/{bia,sach}/VBLN_*_parallel.{tsv,xlsx}, *_color.xlsx, statistic.json, input.csv, config.yaml; notes.xlsx
-  ocr_van_bia/<bia_id>_res.json (+ _ocr_res_img.jpg)        OCR thô văn bia (API lab CLC) — tham khảo
+  ocr_van_bia/<bia_id>_res.json (+ _ocr_res_img.jpg, _ocr_labeled.jpg)   OCR văn bia (API lab CLC, nhóm sửa tay)
   bao_cao/                                                  5. báo cáo số liệu + danh sách cần rà soát
   VERSION.txt, README.md
 """
@@ -28,12 +28,18 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dich", type=Path, default=ROOT.parent / "Ket_Qua_Nop")
     ap.add_argument("--khong-anh-ocr", action="store_true", help="bỏ ảnh minh hoạ OCR văn bia (~300 MB)")
+    ap.add_argument("--ten", default="output", help="tên thư mục bản nộp trong --dich (vd output_20112026)")
     a = ap.parse_args(argv)
-    out = a.dich.resolve() / "output"
+    out = a.dich.resolve() / a.ten
     assert ROOT not in out.parents, "thư mục đích phải nằm ngoài repo (dữ liệu không commit)"
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    for k in ("van_ban_sach", "dataset_ocr", "dataset_dich", "dong_hang_dich_am", "ocr_van_bia", "bao_cao",
+              "VERSION.txt", "README.md"):     # chỉ xoá phần script tạo — giữ file khác người dùng để trong thư mục
+        q = out / k
+        if q.is_dir():
+            shutil.rmtree(q)
+        elif q.exists():
+            q.unlink()
+    out.mkdir(parents=True, exist_ok=True)
     d, p, r = ROOT / "data" / "output", ROOT / "data" / "processed", ROOT / "reports"
     for k in ("Chu_Han", "Phien_am", "Dich_nghia"):
         shutil.copytree(p / k, out / "van_ban_sach" / k)
@@ -43,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     ocr = out / "ocr_van_bia"
     ocr.mkdir()
     for f in sorted((ROOT / "data" / "interim" / "paddle_raw" / "nom_epitaph").iterdir()):
-        if f.name.endswith("_res.json") or (f.name.endswith("_ocr_res_img.jpg") and not a.khong_anh_ocr):
+        if f.name.endswith(("_res.json", ".txt")) or (f.name.endswith(".jpg") and not a.khong_anh_ocr):
             shutil.copy(f, ocr / f.name)
     bc = out / "bao_cao"
     bc.mkdir()
@@ -53,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
                       (r / f"dataset_ocr_{ngay}" / "metrics.csv", "dataset_ocr_metrics.csv"),
                       (r / f"dataset_ocr_{ngay}" / "xu_ly_needs_review.csv", "dataset_ocr_xu_ly_needs_review.csv"),
                       (p / "needs_review.csv", "dataset_ocr_needs_review.csv"),
+                      (r / f"dataset_ocr_{ngay}" / "ra_soat_tay.csv", "dataset_ocr_ra_soat_tay.csv"),
+                      (r / f"dataset_dich_{ngay}" / "ra_soat_tay.csv", "dataset_dich_ra_soat_tay.csv"),
+                      (p / "sua_chu_han.csv", "sua_chu_han.csv"),
                       (r / f"dataset_dich_{ngay}" / "report.csv", "dataset_dich_report.csv"),
                       (r / f"dataset_dich_{ngay}" / "needs_review.csv", "dataset_dich_needs_review.csv"),
                       (r / f"dong_hang_{ngay}" / "bao_cao.csv", "dong_hang_bao_cao.csv"),
